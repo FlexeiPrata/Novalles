@@ -15,7 +15,7 @@ interface Instructor
  * @see [Instruction]
  * @see [AutoBindViewHolder]
  */
-interface Inspector {
+interface Inspector <I: Instructor, V: Any> {
 
     /**
      * For each payload in [payloads] list call a viewHolder corresponding function.
@@ -28,5 +28,5 @@ interface Inspector {
      * @see [Novalles.provideInspectorFromInstructor]
      * @see [Decompose]
      */
-    fun inspectPayloads(payloads: List<Any>)
+    fun inspectPayloads(payloads: List<Any>, instructor: I, viewHolder: V? = null)
 }

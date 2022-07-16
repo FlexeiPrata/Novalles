@@ -1,13 +1,14 @@
 package com.flexeiprata.novalles.interfaces
 
+import com.flexeiprata.novalles.annotations.AutoBindViewHolder
+import com.flexeiprata.novalles.annotations.Instruction
+import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.InspectorOfPayloads
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.UIModelInterface
 import com.flexeiprata.novalles.utils.writingtools.tryNull
 import kotlin.jvm.internal.Reflection
 import kotlin.reflect.KClass
 import kotlin.reflect.full.primaryConstructor
-import com.flexeiprata.novalles.annotations.*
-import com.flexeiprata.novalles.interfaces.*
 
 /**
  * Main class to interact with when you use payloads. Every annotated with [UIModel] data class can be used with it.
@@ -48,9 +49,9 @@ object Novalles {
     /**
      * Provides an [Inspector] from your [Instructor]. It should be annotated with [Instruction] and with option annotation [AutoBindViewHolder].
      */
-    fun <R: Any> provideInspectorFromInstructor(inspector: Instructor, viewHolder: R): Inspector {
-        val raw = fabricate(clazz = inspector::class, InspectorOfPayloads)
-        return tryNull { raw.provide<Inspector>(inspector, viewHolder) } ?: throw IllegalArgumentException("There is no UI Inspectors")
+    fun <R: Instructor> provideInspectorFromInstructor(inspector: KClass<R>): Inspector<R, Any> {
+        val raw = fabricate(clazz = inspector, InspectorOfPayloads)
+        return tryNull { raw.provide<Inspector<R, Any>>() } ?: throw IllegalArgumentException("There is no UI Inspectors")
     }
 
     private fun fabricate(clazz: KClass<*>, type: ProviderOptions): ProviderFactory<*> {

@@ -22,6 +22,8 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         DefaultDiffUtil(PictureUIModel::class)
     ) {
 
+    private val inspector = Novalles.provideInspectorFromInstructor(PictureInstructor::class)
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PictureViewHolder {
         return PictureViewHolder(
             ItemPictureBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -39,18 +41,16 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         payloads: MutableList<Any>
     ) {
         val model = currentList[position] as PictureUIModel
-        val inspector = Novalles.provideInspectorFromInstructor(
-            inspector = PictureInstructor(
-                viewHolder = holder,
-                uiModel = currentList[position] as PictureUIModel
-            ),
-            viewHolder = holder
-        )
         val picturePayloads = payloads.firstOrNull() as? List<Any>
         if (picturePayloads.isNullOrEmpty()) {
             holder.bind(model)
         } else {
-            inspector.inspectPayloads(picturePayloads)
+            //Use instructor to define special cases that cannot be handled with AutoBind.
+            val instructor = PictureInstructor(
+                viewHolder = holder,
+                model
+            )
+            inspector.inspectPayloads(picturePayloads, instructor, viewHolder = holder)
         }
 
         holder.setOnClickActions(model, onClick)
@@ -143,7 +143,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         }
 
         private fun View.forceColor(color: Int) {
-           background = ColorDrawable(color)
+            background = ColorDrawable(color)
         }
 
     }

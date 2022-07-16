@@ -90,13 +90,13 @@ class NovallesProcessor(
 
                 buildIn {
                     appendIn("@Keep")
-                    append("class ${name}Impl(val instructor: $name, val viewHolder: ${viewHolder?.simpleName?.getShortName() ?: "ViewHolder"}) : Inspector { ")
+                    append("class ${name}Impl : Inspector <$name, ${viewHolder?.simpleName?.getShortName()}> {")
                     newLine(1)
                     appendUp(
                         funHeaderBuilder(
                             isOverridden = true,
                             name = "inspectPayloads",
-                            args = listOf("payloads: List<Any>")
+                            args = listOf("payloads: List<Any>, instructor: $name, viewHolder: ${viewHolder?.simpleName?.getShortName() ?: "Any"}?")
                         )
                     )
                     appendUp("payloads.forEach { payload -> ")
@@ -116,7 +116,7 @@ class NovallesProcessor(
 
                         val action = when {
                             inspectorFunc != null && inspectorFunc.isNullable == payloading.isNullable -> "instructor.${inspectorFunc.name}(payload.new${payName})"
-                            viewHolderAutoBinder != null && viewHolderAutoBinder.isFirstArgNullable() == payloading.isNullable -> "viewHolder.set${payName}(payload.new${payName})"
+                            viewHolderAutoBinder != null && viewHolderAutoBinder.isFirstArgNullable() == payloading.isNullable -> "viewHolder?.set${payName}(payload.new${payName})"
                             else -> "Unit".also {
                                 if (viewHolder != null) {
                                     logger.warn(
