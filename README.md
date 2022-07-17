@@ -19,7 +19,7 @@ data class PictureUIModel(
     val title: String,
     val desc: String,
     val likes: Int
-) : BaseUiModel {
+) : BaseUiModel
 ````
 
 * You can use **PrimaryTag** annotation to define property to be used in are items the same comparison.
@@ -82,7 +82,7 @@ inner class PictureInstructor(
 If you completely rely on **AutoBindViewHolder**, you should create the simplest Instructor for your UI Model.
 
 ````kotlin
-    @Instruction(PictureUIModel::class)
+@Instruction(PictureUIModel::class)
 @AutoBindViewHolder(PictureViewHolder::class)
 inner class AutoInstructor : Instructor
 ````
@@ -114,6 +114,7 @@ data class PictureUIModel(
 
 //...
 
+
     inner class PictureViewHolder(private val binding: ItemPictureBinding) : ViewHolder(binding.root) {
 
         //...
@@ -125,6 +126,7 @@ data class PictureUIModel(
 
         //...
     }
+}
 ````
 
 ### Decompose annotations
@@ -170,6 +172,7 @@ data class PictureUIModel(
 
         //...
     }
+}
 ````
 
 ### Conclusions and usage
@@ -209,7 +212,7 @@ buildscript {
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
-    ....
+    //...
     id 'com.google.devtools.ksp'
 }
 ````
