@@ -62,7 +62,7 @@ class DefaultDiffUtil<T : BaseUiModel>(uiModel: KClass<T>) : DiffUtil.ItemCallba
    be passed as the first annotation argument.
 
 ````kotlin
-    @Instruction(PictureUIModel::class)
+@Instruction(PictureUIModel::class)
 @AutoBindViewHolder(PictureViewHolder::class)
 inner class PictureInstructor(
     private val viewHolder: PictureViewHolder,
@@ -192,6 +192,7 @@ fun setImage(image: Int) {
   of functions usage.
 * Novalles does not require any proguard rules and should work normally in release builds if your Ui Models and adapters
   work normally.
+* Decompose annotation should be used careful, because it is very lightly tested.
 * Please, report any issues you've encountered. **Novalles is still in development**, so your feedback is very helpful.
 
 ## How to integrate in your project
