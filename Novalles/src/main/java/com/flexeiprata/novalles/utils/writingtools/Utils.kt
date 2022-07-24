@@ -33,6 +33,10 @@ fun KSDeclaration.findAnnotation(annotation: KClass<*>): KSAnnotation? {
     return annotations.find { it.shortName.getShortName() == annotation.simpleName }
 }
 
+fun KSDeclaration.hasAnnotation(annotation: KClass<*>): Boolean {
+    return annotations.find { it.shortName.getShortName() == annotation.simpleName } != null
+}
+
 fun String.appendIf(condition: Boolean, text: String): String {
     return if (condition) "$this$text" else this
 }

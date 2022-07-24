@@ -30,7 +30,7 @@ object Novalles {
      * @return [UIModelHelper]
      * @see [Novalles.provideUiInterfaceForAs]
      */
-    fun <T: Any> provideUiInterfaceFor(clazz: KClass<T>): UIModelHelper<T> {
+    fun <T : Any> provideUiInterfaceFor(clazz: KClass<T>): UIModelHelper<T> {
         val raw = fabricate(clazz, UIModelInterface)
         return raw.provide() ?: throw IllegalArgumentException("There is no UI interfaces")
     }
@@ -41,17 +41,35 @@ object Novalles {
      * @return [UIModelHelper]
      * @see [Novalles.provideUiInterfaceFor]
      */
-    fun <T: Any, R: Any> provideUiInterfaceForAs(clazz: KClass<T>): UIModelHelper<R> {
+    fun <T : Any, R : Any> provideUiInterfaceForAs(clazz: KClass<T>): UIModelHelper<R> {
         val raw = fabricate(clazz, UIModelInterface)
-        return raw.provide() as? UIModelHelper<R>? ?: throw IllegalArgumentException("There is no UI interfaces")
+        return raw.provide() as? UIModelHelper<R>?
+            ?: throw IllegalArgumentException("There is no UI interfaces")
     }
 
     /**
      * Provides an [Inspector] from your [Instructor]. It should be annotated with [Instruction] and with option annotation [AutoBindViewHolder].
      */
-    fun <R: Instructor> provideInspectorFromInstructor(inspector: KClass<R>): Inspector<R, Any> {
-        val raw = fabricate(clazz = inspector, InspectorOfPayloads)
-        return tryNull { raw.provide<Inspector<R, Any>>() } ?: throw IllegalArgumentException("There is no UI Inspectors")
+    fun <R : Instructor> provideInspectorFromInstructor(instructor: KClass<R>): Inspector<R, Any> {
+        val raw = fabricate(clazz = instructor, InspectorOfPayloads)
+        return tryNull { raw.provide<Inspector<R, Any>>() }
+            ?: throw IllegalArgumentException("There is no UI Inspectors")
+    }
+
+    /**
+     * This function is used internally by Novalles to extract payload from Any? from OnBindViewHolder.
+     *
+     * @see [Inspector.inspectPayloads]
+     */
+    fun extractPayload(from: Any?): List<Any> {
+        return when (from) {
+            is List<*> -> when {
+                from.isEmpty() -> emptyList()
+                from.first() is List<*> -> (from.first() as List<*>).map { it as Any }
+                else -> from.map { it as Any }
+            }
+            else -> emptyList()
+        }
     }
 
     private fun fabricate(clazz: KClass<*>, type: ProviderOptions): ProviderFactory<*> {
@@ -69,7 +87,7 @@ object Novalles {
         UIModelInterface, InspectorOfPayloads
     }
 
-    private data class ProviderFactory <T: Any>(
+    private data class ProviderFactory<T : Any>(
         val clazz: KClass<T>,
     ) {
         inline fun <reified R> provide(vararg args: Any): R? {

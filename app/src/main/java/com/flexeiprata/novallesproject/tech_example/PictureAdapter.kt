@@ -33,27 +33,21 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
     override fun onBindViewHolder(holder: PictureViewHolder, position: Int) {
         onBindViewHolder(holder, position, mutableListOf())
     }
-
-    @Suppress("UNCHECKED_CAST")
+    
     override fun onBindViewHolder(
         holder: PictureViewHolder,
         position: Int,
         payloads: MutableList<Any>
     ) {
         val model = currentList[position] as PictureUIModel
-        val picturePayloads = payloads.firstOrNull() as? List<Any>
-        if (picturePayloads.isNullOrEmpty()) {
+        val instructor = PictureInstructor(
+            viewHolder = holder,
+            model
+        )
+        inspector.inspectPayloads(payloads, instructor, viewHolder = holder) {
             holder.bind(model)
-        } else {
-            //Use instructor to define special cases that cannot be handled with AutoBind.
-            val instructor = PictureInstructor(
-                viewHolder = holder,
-                model
-            )
-            inspector.inspectPayloads(picturePayloads, instructor, viewHolder = holder)
+            holder.setOnClickActions(model, onClick)
         }
-
-        holder.setOnClickActions(model, onClick)
     }
 
     @Instruction(PictureUIModel::class)

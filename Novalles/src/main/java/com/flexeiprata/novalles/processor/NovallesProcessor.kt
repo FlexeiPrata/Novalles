@@ -1,9 +1,6 @@
 package com.flexeiprata.novalles.processor
 
-import com.flexeiprata.novalles.annotations.AutoBindViewHolder
-import com.flexeiprata.novalles.annotations.BindOn
-import com.flexeiprata.novalles.annotations.Instruction
-import com.flexeiprata.novalles.annotations.UIModel
+import com.flexeiprata.novalles.annotations.*
 import com.flexeiprata.novalles.interfaces.Inspector
 import com.flexeiprata.novalles.utils.*
 import com.flexeiprata.novalles.utils.writingtools.*
@@ -78,7 +75,8 @@ class NovallesProcessor(
                 "$PACKAGE.${model.simpleName.getShortName()}Payloads.*",
                 classDeclaration.qualifiedName?.asString(),
                 Inspector::class.qualifiedName,
-                "androidx.annotation.Keep"
+                "androidx.annotation.Keep",
+                "com.flexeiprata.novalles.interfaces.Novalles"
             )
 
             val text = buildString {
@@ -90,16 +88,20 @@ class NovallesProcessor(
 
                 buildIn {
                     appendIn("@Keep")
-                    append("class ${name}Impl : Inspector <$name, ${viewHolder?.simpleName?.getShortName()}> {")
+                    append("class ${name}Impl : Inspector<$name, ${viewHolder?.simpleName?.getShortName()}> {")
                     newLine(1)
                     appendUp(
                         funHeaderBuilder(
                             isOverridden = true,
                             name = "inspectPayloads",
-                            args = listOf("payloads: List<Any>, instructor: $name, viewHolder: ${viewHolder?.simpleName?.getShortName() ?: "Any"}?")
+                            args = listOf("payloads: Any?, instructor: $name, viewHolder: ${viewHolder?.simpleName?.getShortName() ?: "Any"}?, doOnBind: () -> Unit")
                         )
                     )
-                    appendUp("payloads.forEach { payload -> ")
+                    appendUp("val payloadList = Novalles.extractPayload(payloads)")
+                    appendIn("if (payloadList.isEmpty()) {")
+                    appendUp("doOnBind()")
+                    appendDown("}")
+                    appendIn("payloadList.forEach { payload -> ")
                     appendUp("when (payload) {")
                     incrementLevel()
 
@@ -166,6 +168,10 @@ class NovallesProcessor(
 
             val decomposedFields = constructor.parameters.filter { parameter ->
                 parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.Decompose.name } != null
+            }
+
+            decomposedFields.forEach {
+                errorHandler.checkDecomposedValue(classDeclaration, it)
             }
 
 

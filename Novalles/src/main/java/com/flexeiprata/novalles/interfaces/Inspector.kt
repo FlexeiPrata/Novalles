@@ -19,6 +19,11 @@ interface Inspector <I: Instructor, V: Any> {
 
     /**
      * For each payload in [payloads] list call a viewHolder corresponding function.
+     *
+     * You can pass as [payloads]:
+     * 1. List<Any>?
+     * 2. List<List<Any>>?
+     * 3. Default Any? from onBindViewHolder.
      * The corresponding function is chosen in 2 ways:
      * 1. You annotated one of [Instructor] function with [BindOn] annotation, where [BindOn.on] is string value of the corresponding UI model field.
      * 2. You annotated your [Instructor] with [AutoBindViewHolder], where corresponding function to each field is set${fieldName}() function in [AutoBindViewHolder.viewHolder]. Functions should be public with only one argument.
@@ -28,5 +33,5 @@ interface Inspector <I: Instructor, V: Any> {
      * @see [Novalles.provideInspectorFromInstructor]
      * @see [Decompose]
      */
-    fun inspectPayloads(payloads: List<Any>, instructor: I, viewHolder: V? = null)
+    fun inspectPayloads(payloads: Any?, instructor: I, viewHolder: V? = null, doOnBind: () -> Unit)
 }

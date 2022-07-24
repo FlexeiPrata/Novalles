@@ -3,14 +3,16 @@ package com.flexeiprata.novalles.processor
 import com.flexeiprata.novalles.annotations.AutoBindViewHolder
 import com.flexeiprata.novalles.annotations.BindOn
 import com.flexeiprata.novalles.utils.KUIAnnotations
+import com.flexeiprata.novalles.utils.isPrimitive
 import com.flexeiprata.novalles.utils.writingtools.findAnnotation
+import com.flexeiprata.novalles.utils.writingtools.findOut
+import com.google.devtools.ksp.closestClassDeclaration
 import com.google.devtools.ksp.isAbstract
 import com.google.devtools.ksp.isInternal
 import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.KSPLogger
-import com.google.devtools.ksp.symbol.ClassKind
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.*
+import kotlin.math.E
 
 class ErrorHandler(private val logger: KSPLogger) {
 
@@ -28,13 +30,13 @@ class ErrorHandler(private val logger: KSPLogger) {
             else -> Error.Clear
         }
 
-        val warnings = Error.Warnings(
+        /*val warnings = Error.Warnings(
             mutableListOf<String>().apply {
                 if (hasDecomposedFields(declaration)) add("This class has @Decompose experimental annotation. Please, report any happened issue.")
             }
-        )
+        )*/
 
-        log(declaration, error, warnings)
+        log(declaration, error, Error.Warnings(emptyList()))
 
     }
 
@@ -56,6 +58,29 @@ class ErrorHandler(private val logger: KSPLogger) {
         val warnings = Error.Clear
 
         log(declaration, error, warnings)
+    }
+
+    fun checkDecomposedValue(node: KSClassDeclaration, decompose: KSValueParameter) {
+        val clazz = decompose.type.resolve().declaration.closestClassDeclaration()
+        val error = when {
+            clazz == null -> Error.Critical(
+                "Unexpected error during finding class declaration"
+            )
+            !clazz.isPublic() || clazz.isInternal() -> Error.Critical(
+                "The decomposed value is not valid."
+            )
+            clazz.getAllProperties().findOut { !it.isPublic() } -> Error.Critical(
+                "The decomposed value should be data class with public fields"
+            )
+            decompose.type.element.isPrimitive() -> Error.Critical(
+                "Decomposed value should not be primitive"
+            )
+            else -> Error.Clear
+        }
+
+        val warnings = Error.Clear
+
+        log(node, error, warnings)
     }
 
     private fun log(node: KSClassDeclaration, vararg errors: Error) {

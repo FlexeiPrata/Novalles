@@ -35,3 +35,7 @@ annotation class BindOn(val on: String)
 @Retention(AnnotationRetention.SOURCE)
 annotation class AutoBindViewHolder(val viewHolder: KClass<*>)
 
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.SOURCE)
+annotation class Bind
+
