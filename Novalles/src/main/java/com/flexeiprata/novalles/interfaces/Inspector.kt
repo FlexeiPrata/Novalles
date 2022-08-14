@@ -23,7 +23,8 @@ interface Inspector <I: Instructor, V: Any> {
      * You can pass as [payloads]:
      * 1. List<Any>?
      * 2. List<List<Any>>?
-     * 3. Default Any? from onBindViewHolder.
+     * 3. Any tag, you've registered with [BindOnTag].
+     * 4. Default Any? from onBindViewHolder.
      * The corresponding function is chosen in 2 ways:
      * 1. You annotated one of [Instructor] function with [BindOn] annotation, where [BindOn.on] is string value of the corresponding UI model field.
      * 2. You annotated your [Instructor] with [AutoBindViewHolder], where corresponding function to each field is set${fieldName}() function in [AutoBindViewHolder.viewHolder]. Functions should be public with only one argument.

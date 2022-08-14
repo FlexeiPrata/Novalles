@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView.ViewHolder
 import com.flexeiprata.novalles.annotations.AutoBindViewHolder
 import com.flexeiprata.novalles.annotations.BindOn
+import com.flexeiprata.novalles.annotations.BindOnTag
 import com.flexeiprata.novalles.annotations.Instruction
 import com.flexeiprata.novalles.interfaces.Instructor
 import com.flexeiprata.novalles.interfaces.Novalles
@@ -33,7 +34,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
     override fun onBindViewHolder(holder: PictureViewHolder, position: Int) {
         onBindViewHolder(holder, position, mutableListOf())
     }
-    
+
     override fun onBindViewHolder(
         holder: PictureViewHolder,
         position: Int,
@@ -62,6 +63,12 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
             val realDesc = "<b>$title</b> (${uiModel.tag})"
             viewHolder.setTitle(realDesc)
         }
+
+        @BindOnTag(PictureUIModel.Tags.SetNullLikes::class)
+        fun setZeroLikes() {
+            viewHolder.setLikes(0)
+        }
+
 
     }
 

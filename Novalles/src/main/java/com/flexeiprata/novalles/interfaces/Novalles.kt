@@ -14,7 +14,7 @@ import kotlin.reflect.full.primaryConstructor
  * Main class to interact with when you use payloads. Every annotated with [UIModel] data class can be used with it.
  * To use Novalles, you should:
  * 1. Annotate your UI Model (which you use in your Adapter) with [UIModel] annotation. You can also configure it with other annotations.
- * 2. Call [Novalles.provideUiInterfaceFor] or [Novalles.provideUiInterfaceForAs] in your diff util to check [UIModelHelper.areItemsTheSame] and [UIModelHelper.areContentsTheSame] and call [UIModelHelper.changePayloads].
+ * 2. Call [Novalles.provideUiInterfaceFor], [Novalles.provideUiInterfaceForAs] or [Novalles.provideCachedUiInterfaceForAs] in your diff util to check [UIModelHelper.areItemsTheSame] and [UIModelHelper.areContentsTheSame] and call [UIModelHelper.changePayloads].
  * 3. Create an Instructor class with [Instructor] interface and [Instruction] annotation, where [Instruction.model] is your UI Model. You can also annotate it with [AutoBindViewHolder]
  * 4. To retrieve your [Inspector] class, pass your instructor to [Novalles.provideInspectorFromInstructor] in your onBindViewHolder() and call [Inspector.inspectPayloads] on your payloads.
  *
@@ -23,6 +23,8 @@ import kotlin.reflect.full.primaryConstructor
  * @see [Instruction]
  */
 object Novalles {
+
+    private val cache = mutableMapOf<String, UIModelHelper<Any>>()
 
     /**
      * Provides an [UIModelHelper] from your [UIModel].
@@ -48,6 +50,22 @@ object Novalles {
     }
 
     /**
+     * Experimental.
+     *
+     * Do the same, as [provideUiInterfaceForAs], but if instance of [UIModelHelper] was already created, simply get it from RAM.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any, R : Any> provideCachedUiInterfaceForAs(clazz: KClass<T>): UIModelHelper<R> {
+        return (cache[clazz.qualifiedName] as UIModelHelper<R>?) ?: (provideUiInterfaceForAs<T, R>(clazz).also {
+            cache[clazz.qualifiedName!!] = it as UIModelHelper<Any>
+        })
+    }
+
+    fun clearCache() {
+        cache.clear()
+    }
+
+    /**
      * Provides an [Inspector] from your [Instructor]. It should be annotated with [Instruction] and with option annotation [AutoBindViewHolder].
      */
     fun <R : Instructor> provideInspectorFromInstructor(instructor: KClass<R>): Inspector<R, Any> {
@@ -68,6 +86,7 @@ object Novalles {
                 from.first() is List<*> -> (from.first() as List<*>).map { it as Any }
                 else -> from.map { it as Any }
             }
+            is Any -> listOf(from)
             else -> emptyList()
         }
     }

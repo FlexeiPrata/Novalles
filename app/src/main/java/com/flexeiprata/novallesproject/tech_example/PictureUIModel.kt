@@ -29,6 +29,10 @@ data class PictureUIModel(
         return helper.changePayloads(this, other)
     }
 
+    sealed interface Tags {
+        object SetNullLikes
+    }
+
 }
 
 data class ColorPair(

@@ -191,6 +191,36 @@ data class PictureUIModel(
 }
 ````
 
+### Manual notifying
+You can manually notify your adapter with **BindOnTag** usage.
+1. Create some sealed class or other instance that has its own class.
+````kotlin
+sealed interface Tags {
+    object SetNullLikes
+}
+````
+2. Register this tag in your **Instructor** with **BindOnTag**
+````kotlin
+@Instruction(PictureUIModel::class)
+@AutoBindViewHolder(PictureViewHolder::class)
+inner class PictureInstructor(
+    private val viewHolder: PictureViewHolder,
+    private val uiModel: PictureUIModel
+) : Instructor {
+
+    //...
+
+    @BindOnTag(Tags.SetNullLikes::class)
+    fun setZeroLikes() {
+        viewHolder.setLikes(0)
+    }
+
+}
+````
+3. Call necessary function and pass this tag as a Payload.
+````kotlin
+novallesAdapter.notifyItemRangeChanged(0, novallesAdapter.itemCount, Tags.SetNullLikes)
+````
 ### Conclusions and usage
 
 * To maximize benefit of the Novalles, you can animate your views inside your set functions in a viewHolder.
@@ -247,8 +277,8 @@ allprojects {
 
 dependencies {
     //...
-    implementation 'com.github.flexeiprata:novalles:0.4.0'
-    ksp 'com.github.flexeiprata:novalles:0.4.0'
+    implementation 'com.github.flexeiprata:novalles:0.5.0'
+    ksp 'com.github.flexeiprata:novalles:0.5.0'
     //...
 }
 

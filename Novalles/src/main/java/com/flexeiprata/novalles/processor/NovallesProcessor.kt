@@ -26,11 +26,10 @@ class NovallesProcessor(
         val symbols = resolver.getSymbolsWithAnnotation(UIModel::class.qualifiedName!!)
         val instructors = resolver.getSymbolsWithAnnotation(Instruction::class.qualifiedName!!)
 
-
         val dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray())
 
         symbols.filter { it is KSClassDeclaration && it.validate() }
-            .forEach { it.accept(MyEventKClassVisitor(dependencies), Unit) }
+            .forEach { it.accept(UIModelVisitor(dependencies), Unit) }
 
         instructors.filter { it is KSClassDeclaration && it.validate() }
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
@@ -56,7 +55,7 @@ class NovallesProcessor(
 
             val inspectorFunctions =
                 classDeclaration.getAllFunctions().filter {
-                    it.findAnnotation(BindOn::class) != null
+                    it.hasAnnotation(BindOn::class)
                 }.map {
                     InspectorFunData(
                         name = it.simpleName.getShortName(),
@@ -65,12 +64,18 @@ class NovallesProcessor(
                     )
                 }.toList()
 
-            val viewHolderFun = viewHolder?.getAllFunctions()?.filterNot { !it.isPublic() } ?: emptySequence()
+            val tagFunctions = classDeclaration.getAllFunctions().filter {
+                it.hasAnnotation(BindOnTag::class)
+            }.map {
+                it.simpleName.getShortName() to it.findAnnotation(BindOnTag::class)?.arguments?.first()?.value as KSType
+            }
+
+            val viewHolderFun =
+                viewHolder?.getAllFunctions()?.filterNot { !it.isPublic() } ?: emptySequence()
             val payloads = payloadsMap[model.simpleName.getShortName()] ?: emptyList()
 
             //Imports
             val listOfImports = listOfNotNull(
-                "androidx.recyclerview.widget.RecyclerView.ViewHolder",
                 viewHolder?.qualifiedName?.asString(),
                 "$PACKAGE.${model.simpleName.getShortName()}Payloads.*",
                 classDeclaration.qualifiedName?.asString(),
@@ -113,7 +118,7 @@ class NovallesProcessor(
                         }
 
                         val viewHolderAutoBinder =
-                            viewHolderFun.find { it.simpleName.getShortName() == "set${payName}" && it.parameters.size == 1}
+                            viewHolderFun.find { it.simpleName.getShortName() == "set${payName}" && it.parameters.size == 1 }
 
 
                         val action = when {
@@ -129,6 +134,10 @@ class NovallesProcessor(
                             }
                         }
                         appendIn("is ${payloading.name} -> $action")
+                    }
+
+                    tagFunctions.forEach {
+                        appendIn("is ${it.second.declaration.qualifiedName?.asString()} -> instructor.${it.first}()")
                     }
                     closeFunctions(0)
                 }
@@ -147,7 +156,7 @@ class NovallesProcessor(
 
     }
 
-    private inner class MyEventKClassVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
+    private inner class UIModelVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
 
         override fun visitClassDeclaration(
             classDeclaration: KSClassDeclaration, data: Unit
@@ -240,8 +249,9 @@ class NovallesProcessor(
                 decomposedFieldsValues.forEach Decomposed@{
                     it.params.forEach { parameter ->
                         if (!parameter.type.element.isPrimitive()) {
-                            val clazz = parameter.type.resolve().declaration.qualifiedName?.asString()
-                                ?: return@forEach
+                            val clazz =
+                                parameter.type.resolve().declaration.qualifiedName?.asString()
+                                    ?: return@forEach
                             importsMap[parameter.type.resolve().declaration.qualifiedName?.getShortName()
                                 ?: return@forEach] = clazz
                         }
@@ -338,13 +348,15 @@ class NovallesProcessor(
                     closeFunctions(1)
 
                     appendIn("@Suppress(\"UNCHECKED_CAST\")")
-                    appendIn(funHeaderBuilder(
-                        isOverridden = true,
-                        genericString = "<R: BasePayload>",
-                        name = "changePayloadsMap",
-                        returnType = "List<R>",
-                        args = listOf("oldItem: $name", "newItem: Any")
-                    ))
+                    appendIn(
+                        funHeaderBuilder(
+                            isOverridden = true,
+                            genericString = "<R: BasePayload>",
+                            name = "changePayloadsMap",
+                            returnType = "List<R>",
+                            args = listOf("oldItem: $name", "newItem: Any")
+                        )
+                    )
                     appendUp("return changePayloads(oldItem, newItem).map {it as R} ")
                     closeFunctions(0)
                 }
