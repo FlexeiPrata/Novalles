@@ -12,6 +12,7 @@ import com.google.devtools.ksp.isInternal
 import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.*
+import kotlin.Error
 import kotlin.math.E
 
 class ErrorHandler(private val logger: KSPLogger) {
@@ -27,14 +28,11 @@ class ErrorHandler(private val logger: KSPLogger) {
             declaration.primaryConstructor?.parameters?.find { it.isVararg || !it.type.resolve().declaration.isPublic() } != null -> Error.Critical(
                 "Some of class' parameters are not compatible with Novalles or are not public."
             )
+            hasDecomposedPrimitives(declaration) -> Error.Critical(
+                "Decomposed value should not be primitive."
+            )
             else -> Error.Clear
         }
-
-        /*val warnings = Error.Warnings(
-            mutableListOf<String>().apply {
-                if (hasDecomposedFields(declaration)) add("This class has @Decompose experimental annotation. Please, report any happened issue.")
-            }
-        )*/
 
         log(declaration, error, Error.Warnings(emptyList()))
 
@@ -112,9 +110,9 @@ class ErrorHandler(private val logger: KSPLogger) {
         } != null
     }
 
-    private fun hasDecomposedFields(declaration: KSClassDeclaration): Boolean {
+    private fun hasDecomposedPrimitives(declaration: KSClassDeclaration): Boolean {
         return declaration.primaryConstructor?.parameters?.find { parameter ->
-            parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.Decompose.name } != null
+            parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.Decompose.name } != null && parameter.type.isPrimitive()
         } != null
     }
 

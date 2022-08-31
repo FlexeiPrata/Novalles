@@ -22,7 +22,8 @@ fun <T> Sequence<T>.validateIfRootInterface(): KSClassDeclaration? {
 }
 
 fun KSValueParameter.writeAsVariable(parent: DecomposedEncapsulation? = null): String {
-    return "${this.type.element}${if (this.type.resolve().isMarkedNullable || parent?.nullable == true) "?" else ""}"
+    return "${this.type.element}${this.type.element?.typeArguments?.toTypeString()}" +
+            if (this.type.resolve().isMarkedNullable || parent?.nullable == true) "?" else ""
 }
 
 inline fun <T> Sequence<T>.findOut(predicate: (T) -> Boolean): Boolean {
@@ -50,6 +51,17 @@ inline fun <reified T> tryNull(action: () -> T): T? {
         action()
     } catch (ex: Exception) {
         null
+    }
+}
+
+fun List<KSTypeArgument>.toTypeString(): String {
+    return when {
+        isNullOrEmpty() -> ""
+        else -> joinToString(
+            prefix = "<",
+            postfix = ">",
+            separator = ", "
+        ) { it.type.toString() + if (it.type?.resolve()?.isMarkedNullable == true) "?" else "" }
     }
 }
 

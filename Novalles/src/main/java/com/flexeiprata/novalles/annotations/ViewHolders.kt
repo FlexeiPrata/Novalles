@@ -11,7 +11,7 @@ import com.flexeiprata.novalles.interfaces.*
  * @see [BindOn]
  */
 @Target(AnnotationTarget.CLASS)
-@Retention(AnnotationRetention.SOURCE)
+@Retention(AnnotationRetention.RUNTIME)
 annotation class Instruction(val model: KClass<*>)
 
 /**

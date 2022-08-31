@@ -1,4 +1,4 @@
-# Novalles
+# Novalles 
 
 *Library to simplify and speed up the creation and work with adapters with payload.*
 
@@ -87,11 +87,11 @@ If you completely rely on **AutoBindViewHolder**, you should create the simplest
 inner class AutoInstructor : Instructor
 ````
 
-5. Create an instance of the **Inspector** class using _Novalles.**provideInspectorFromInstructor**(instructor:
-   Instructor)_ function. Better to create it outside any function, create it directly in the adapter itself.
+5. Create an instance of the **Inspector** class using _Novalles.**provideInspectorFromUiModel**(uiModelClass:
+   KClass<>)_ function. Better to create it outside any function, so create it directly in the adapter itself.
 
 ````kotlin
-private val inspector = Novalles.provideInspectorFromInstructor(PictureInstructor::class)
+private val inspector = Novalles.provideInspectorFromUiModel(PictureUIModel::class)
 ````
 
 6. Invoke _Inspector.**inspectPayloads**_ with 4 arguments: your payload,
@@ -248,7 +248,8 @@ fun setImage(image: Int) {
 ````groovy
 buildscript {
     dependencies {
-        classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:1.6.21-1.0.5")
+        //You can use other Kotlin version.
+        classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:1.7.20-Beta-1.0.6")
     }
 }
 ````
@@ -277,8 +278,8 @@ allprojects {
 
 dependencies {
     //...
-    implementation 'com.github.flexeiprata:novalles:0.5.0'
-    ksp 'com.github.flexeiprata:novalles:0.5.0'
+    implementation 'com.github.flexeiprata:novalles:0.6.0'
+    ksp 'com.github.flexeiprata:novalles:0.6.0'
     //...
 }
 

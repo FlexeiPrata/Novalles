@@ -93,7 +93,7 @@ class NovallesProcessor(
 
                 buildIn {
                     appendIn("@Keep")
-                    append("class ${name}Impl : Inspector<$name, ${viewHolder?.simpleName?.getShortName()}> {")
+                    append("class ${model.simpleName.getShortName()}Inspector : Inspector<$name, ${viewHolder?.simpleName?.getShortName()}> {")
                     newLine(1)
                     appendUp(
                         funHeaderBuilder(
@@ -146,7 +146,7 @@ class NovallesProcessor(
             val file = codeGenerator.createNewFile(
                 dependencies,
                 PACKAGE,
-                "${name}PayloadOfUIModel"
+                "${model.simpleName.getShortName()}PayloadOfUIModel"
             )
 
             file.write(text.toByteArray())
@@ -244,6 +244,14 @@ class NovallesProcessor(
                             ?: return@forEach
                         importsMap[it.type.resolve().declaration.qualifiedName?.getShortName()
                             ?: return@forEach] = clazz
+                        it.type.element?.typeArguments?.forEach Typed@{
+
+                            if (!it.type.isPrimitive()) {
+                                val nameClass = it.type?.resolve()?.declaration?.qualifiedName?.asString() ?: return@Typed
+                                importsMap[it.type?.resolve()?.declaration?.qualifiedName?.getShortName()
+                                    ?: return@Typed] = nameClass
+                            }
+                        }
                     }
                 }
                 decomposedFieldsValues.forEach Decomposed@{
@@ -255,9 +263,15 @@ class NovallesProcessor(
                             importsMap[parameter.type.resolve().declaration.qualifiedName?.getShortName()
                                 ?: return@forEach] = clazz
                         }
+                        parameter.type.element?.typeArguments?.forEach Typed@{
+                            if (!it.type.isPrimitive()) {
+                                val nameClass = it.type?.resolve()?.declaration?.qualifiedName?.asString() ?: return@Typed
+                                importsMap[it.type?.resolve()?.declaration?.qualifiedName?.getShortName()
+                                    ?: return@Typed] = nameClass
+                            }
+                        }
                     }
                 }
-
 
                 importsMap.values.forEach {
                     add("import $it")

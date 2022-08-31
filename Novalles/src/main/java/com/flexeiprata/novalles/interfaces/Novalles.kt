@@ -3,8 +3,7 @@ package com.flexeiprata.novalles.interfaces
 import com.flexeiprata.novalles.annotations.AutoBindViewHolder
 import com.flexeiprata.novalles.annotations.Instruction
 import com.flexeiprata.novalles.annotations.UIModel
-import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.InspectorOfPayloads
-import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.UIModelInterface
+import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.*
 import com.flexeiprata.novalles.utils.writingtools.tryNull
 import kotlin.jvm.internal.Reflection
 import kotlin.reflect.KClass
@@ -68,9 +67,22 @@ object Novalles {
     /**
      * Provides an [Inspector] from your [Instructor]. It should be annotated with [Instruction] and with option annotation [AutoBindViewHolder].
      */
+    @Deprecated(
+        message = "Function is deprecated. You can get inspector directly from UIModel class.",
+        replaceWith = ReplaceWith("Novalles.provideInspectorFromUiModel(/*UIModel*/)")
+    )
     fun <R : Instructor> provideInspectorFromInstructor(instructor: KClass<R>): Inspector<R, Any> {
-        val raw = fabricate(clazz = instructor, InspectorOfPayloads)
+        val raw = fabricate(clazz = instructor, InspectorOfPayloadsIndirect)
         return tryNull { raw.provide<Inspector<R, Any>>() }
+            ?: throw IllegalArgumentException("There is no UI Inspectors")
+    }
+
+    /**
+     * Provides an [Inspector] from your [UIModel]. It should be linked with only one [Instructor] via [Instruction].
+     */
+    fun provideInspectorFromUiModel(UiModel: KClass<out Any>): Inspector<Instructor, Any> {
+        val raw = fabricate(clazz = UiModel, InspectorOfPayloadsDirect)
+        return tryNull { raw.provide<Inspector<Instructor, Any>>() }
             ?: throw IllegalArgumentException("There is no UI Inspectors")
     }
 
@@ -95,7 +107,11 @@ object Novalles {
         val name = clazz.simpleName
         val className = when (type) {
             UIModelInterface -> "ksp.novalles.models.${name}UIHelper"
-            InspectorOfPayloads -> "ksp.novalles.models.${name}Impl"
+            InspectorOfPayloadsIndirect -> {
+                val uiModelName = (clazz.annotations.find { it is Instruction } as Instruction).model
+                "ksp.novalles.models.${uiModelName.simpleName}Inspector"
+            }
+            InspectorOfPayloadsDirect -> "ksp.novalles.models.${name}Inspector"
         }
         val from = Reflection.createKotlinClass(Class.forName(className))
         return ProviderFactory(from)
@@ -103,7 +119,7 @@ object Novalles {
 
 
     private enum class ProviderOptions {
-        UIModelInterface, InspectorOfPayloads
+        UIModelInterface, InspectorOfPayloadsIndirect, InspectorOfPayloadsDirect
     }
 
     private data class ProviderFactory<T : Any>(

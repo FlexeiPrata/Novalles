@@ -23,7 +23,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         DefaultDiffUtil(PictureUIModel::class)
     ) {
 
-    private val inspector = Novalles.provideInspectorFromInstructor(PictureInstructor::class)
+    private val inspector = Novalles.provideInspectorFromUiModel(PictureUIModel::class)
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PictureViewHolder {
         return PictureViewHolder(
