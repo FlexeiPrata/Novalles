@@ -20,5 +20,10 @@ data class Payloading(
 data class InspectorFunData(
     val name: String,
     val arg: String,
-    val isNullable: Boolean
+    val isNullable: Boolean?
+)
+
+data class InspectorFunDataFlat(
+    val name: String,
+    val target: String
 )

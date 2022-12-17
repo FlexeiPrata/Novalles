@@ -15,10 +15,8 @@ import com.flexeiprata.novallesproject.tech_example.ColorPair
 import com.flexeiprata.novallesproject.tech_example.PictureAdapter
 import com.flexeiprata.novallesproject.tech_example.PictureUIModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -82,11 +80,6 @@ class FirstFragment : Fragment() {
                 )
             }
             dataChannel.tryEmit(newList)
-        }
-
-        //Shuffle
-        binding.shuffle.setOnClickListener {
-            dataChannel.tryEmit(novallesAdapter.currentList.shuffled())
         }
 
         //Colors

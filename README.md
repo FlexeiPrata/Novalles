@@ -56,14 +56,14 @@ class DefaultDiffUtil<T : BaseUiModel>(uiModel: KClass<T>) : DiffUtil.ItemCallba
 ````
 
 4. Create a class, that extends **Instructor** interface. Annotate it with **Instruction** annotation, pass your _UI
-   Model_ class as the annotation argument. You can also annotate it with **AutoBindViewHolder** _(See corresponding
+   Model_ class as the annotation argument. You can also annotate it with **BindViewHolder** _(See corresponding
    section for more details)_. In this class you should create functions, that will be called on a value change. 
 Use **BindOn** annotation to tell Novalles which function should be called when a value has been changed, value name should
    be passed as the first annotation argument.
 
 ````kotlin
 @Instruction(PictureUIModel::class)
-@AutoBindViewHolder(PictureViewHolder::class)
+@BindViewHolder(PictureViewHolder::class)
 inner class PictureInstructor(
     private val viewHolder: PictureViewHolder,
     private val uiModel: PictureUIModel
@@ -71,19 +71,31 @@ inner class PictureInstructor(
 
     //This function will be called, when title changed.
     @BindOn("title")
-    fun setTitleComplex(title: String) {
-        val realDesc = "<b>$title</b> (${uiModel.tag})"
+    fun setTitleComplex() {
+        val realDesc = "<b>${uiModel.title}</b> (${uiModel.tag})"
         viewHolder.setTitle(realDesc)
     }
 
 }
 ````
 
-If you completely rely on **AutoBindViewHolder**, you should create the simplest Instructor for your UI Model.
+You can bind more than one field at once:
+````kotlin
+
+//This function will be called, when title or count changed.
+@BindOnFields(["title", "count"])
+fun setTitleAndCount() {
+    val realDesc = "<b>${uiModel.title}</b> (${uiModel.count})"
+    viewHolder.setTitle(realDesc)
+}
+    
+````
+
+If you completely rely on **BindViewHolder**, you can create the simplest Instructor for your UI Model.
 
 ````kotlin
 @Instruction(PictureUIModel::class)
-@AutoBindViewHolder(PictureViewHolder::class)
+@BindViewHolder(PictureViewHolder::class)
 inner class AutoInstructor : Instructor
 ````
 
@@ -116,10 +128,11 @@ override fun onBindViewHolder(
 }
 ````
 
-### AutoBindViewHolder
+### BindViewHolder
 
 Class annotated with it is considered to be the instruction how to handle payloads for UI Model. It should also
-implement **Instructor** interface. Your functions should be names as _set{PropertyName}_.
+implement **Instructor** interface. Your functions should be names as _{prefix}{PropertyName}{postfix}_.
+The default prefix is **set**. There is no default postfix. 
 
 ````kotlin
 @UIModel
@@ -153,7 +166,7 @@ Value, annotated with **Decompose** will be decomposed with its own values. For 
 properties, they will be used in any Novalles' actions separately:
 Novalles will generate 2 different payloads objects in _UIModelHelper.**changePayloads**_, compare them in _UIModelHelper.**areContentsTheSame**_ separately.
 
-Also, if you use **AutoBindViewHolder**, you should use _set${FieldName}In${DecomposedFieldName}()_ functions in
+Also, if you use **BindViewHolder**, you should use _{prefix}${FieldName}In${DecomposedFieldName}{postfix}()_ functions in
 your viewHolder for each field of your decomposed value.
 
 ````kotlin
@@ -202,7 +215,7 @@ sealed interface Tags {
 2. Register this tag in your **Instructor** with **BindOnTag**
 ````kotlin
 @Instruction(PictureUIModel::class)
-@AutoBindViewHolder(PictureViewHolder::class)
+@BindViewHolder(PictureViewHolder::class)
 inner class PictureInstructor(
     private val viewHolder: PictureViewHolder,
     private val uiModel: PictureUIModel
@@ -249,7 +262,7 @@ fun setImage(image: Int) {
 buildscript {
     dependencies {
         //You can use other Kotlin version.
-        classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:1.7.20-Beta-1.0.6")
+        classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:1.7.20-1.0.6")
     }
 }
 ````
@@ -278,8 +291,8 @@ allprojects {
 
 dependencies {
     //...
-    implementation 'com.github.flexeiprata:novalles:0.6.0'
-    ksp 'com.github.flexeiprata:novalles:0.6.0'
+    implementation 'com.github.flexeiprata:novalles:{currentVersion}'
+    ksp 'com.github.flexeiprata:novalles:{currentVersion}'
     //...
 }
 

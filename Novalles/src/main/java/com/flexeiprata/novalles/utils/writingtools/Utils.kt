@@ -54,6 +54,13 @@ inline fun <reified T> tryNull(action: () -> T): T? {
     }
 }
 
+/**
+ * @throws TypeCastException
+ */
+inline fun <reified T> List<KSValueArgument>.retrieveArg(name: String): T {
+    return find { it.name?.getShortName() == name }?.value as T
+}
+
 fun List<KSTypeArgument>.toTypeString(): String {
     return when {
         isNullOrEmpty() -> ""

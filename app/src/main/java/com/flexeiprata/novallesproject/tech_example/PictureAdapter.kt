@@ -10,10 +10,7 @@ import androidx.annotation.ColorInt
 import androidx.core.text.HtmlCompat
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView.ViewHolder
-import com.flexeiprata.novalles.annotations.AutoBindViewHolder
-import com.flexeiprata.novalles.annotations.BindOn
-import com.flexeiprata.novalles.annotations.BindOnTag
-import com.flexeiprata.novalles.annotations.Instruction
+import com.flexeiprata.novalles.annotations.*
 import com.flexeiprata.novalles.interfaces.Instructor
 import com.flexeiprata.novalles.interfaces.Novalles
 import com.flexeiprata.novallesproject.databinding.ItemPictureBinding
@@ -52,16 +49,17 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
     }
 
     @Instruction(PictureUIModel::class)
-    @AutoBindViewHolder(PictureViewHolder::class)
+    @BindViewHolder(PictureViewHolder::class)
     inner class PictureInstructor(
         private val viewHolder: PictureViewHolder,
         private val uiModel: PictureUIModel
     ) : Instructor {
 
-        @BindOn("title")
-        fun setTitleComplex(title: String) {
-            val realDesc = "<b>$title</b> (${uiModel.tag})"
+        @BindOnFields(["title", "image"])
+        fun setTitleComplex() {
+            val realDesc = "<b>${uiModel.title}</b> (${uiModel.tag})"
             viewHolder.setTitle(realDesc)
+            viewHolder.setImage(uiModel.image)
         }
 
         @BindOnTag(PictureUIModel.Tags.SetNullLikes::class)

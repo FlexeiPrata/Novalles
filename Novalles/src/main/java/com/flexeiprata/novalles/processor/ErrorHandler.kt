@@ -81,6 +81,16 @@ class ErrorHandler(private val logger: KSPLogger) {
         log(node, error, warnings)
     }
 
+    fun throwUnexpectedError(from: KSClassDeclaration): Nothing {
+        log(from, Error.Critical("Unexpected error! Have you configured your UI Model properly?"))
+        throw Exception("Unexpected error! Have you configured your UI Model properly?")
+    }
+
+    fun logError(node: KSClassDeclaration, message: String): Nothing {
+        log(node, Error.Critical(message))
+        throw Exception(message)
+    }
+
     private fun log(node: KSClassDeclaration, vararg errors: Error) {
         errors.forEach {
             when (it) {

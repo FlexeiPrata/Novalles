@@ -9,6 +9,6 @@ java {
 }
 
 dependencies {
-    implementation("com.google.devtools.ksp:symbol-processing-api:1.6.21-1.0.5")
-    implementation "org.jetbrains.kotlin:kotlin-reflect:1.6.21"
+    implementation("com.google.devtools.ksp:symbol-processing-api:1.7.20-1.0.6")
+    implementation "org.jetbrains.kotlin:kotlin-reflect:1.7.20"
 }

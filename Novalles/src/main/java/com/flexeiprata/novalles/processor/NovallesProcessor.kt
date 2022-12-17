@@ -13,6 +13,9 @@ import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
 
+//TODO: replace returns with exceptions
+//TODO: optimize code analysis (f.e. resolve())
+//TODO: extract logic to different functions
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
     private val logger: KSPLogger,
@@ -39,30 +42,41 @@ class NovallesProcessor(
 
     private inner class ViewHoldersVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
 
+        val errorHandler = ErrorHandler(logger)
 
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
 
-            val errorHandler = ErrorHandler(logger)
             errorHandler.checkInspector(classDeclaration)
 
             val core = classDeclaration.findAnnotation(Instruction::class) ?: return
-            val model =
-                (core.arguments.first().value as KSType).declaration.closestClassDeclaration()
-                    ?: return
-            val viewHolder =
-                (classDeclaration.findAnnotation(AutoBindViewHolder::class)?.arguments?.first()?.value as KSType?)?.declaration?.closestClassDeclaration()
+            val model = (core.arguments.first().value as KSType).declaration.closestClassDeclaration() ?: return
+            val (viewHolder, prefix, postfix) = extractViewHolderAnnotations(classDeclaration)
             val name = classDeclaration.simpleName.getShortName()
 
-            val inspectorFunctions =
-                classDeclaration.getAllFunctions().filter {
+            val declarationFunctions = classDeclaration.getAllFunctions()
+
+            val inspectorFunctions = declarationFunctions.filter {
                     it.hasAnnotation(BindOn::class)
                 }.map {
                     InspectorFunData(
                         name = it.simpleName.getShortName(),
                         arg = it.annotations.first().arguments.first().value as String,
-                        isNullable = it.parameters.first().type.resolve().isMarkedNullable
+                        isNullable = it.parameters.firstOrNull()?.type?.resolve()?.isMarkedNullable
                     )
                 }.toList()
+
+            val inspectorMultipleValues = declarationFunctions.filter { function ->
+                function.hasAnnotation(BindOnFields::class)
+            }.map { function ->
+                val fields = function.findAnnotation(BindOnFields::class)?.arguments?.first()?.value as ArrayList<*>? ?: errorHandler.throwUnexpectedError(classDeclaration)
+                fields.filterIsInstance<String>().map {
+                    InspectorFunDataFlat(
+                        name = function.simpleName.getShortName(),
+                        target = it
+                    )
+                }
+            }.flatten()
+
 
             val tagFunctions = classDeclaration.getAllFunctions().filter {
                 it.hasAnnotation(BindOnTag::class)
@@ -71,13 +85,13 @@ class NovallesProcessor(
             }
 
             val viewHolderFun =
-                viewHolder?.getAllFunctions()?.filterNot { !it.isPublic() } ?: emptySequence()
+                viewHolder.getAllFunctions().filterNot { !it.isPublic() }
             val payloads = payloadsMap[model.simpleName.getShortName()] ?: emptyList()
 
             //Imports
             val listOfImports = listOfNotNull(
-                viewHolder?.qualifiedName?.asString(),
-                "$PACKAGE.${model.simpleName.getShortName()}Payloads.*",
+                viewHolder.qualifiedName?.asString(),
+                if (payloads.isNotEmpty()) "$PACKAGE.${model.simpleName.getShortName()}Payloads.*" else null,
                 classDeclaration.qualifiedName?.asString(),
                 Inspector::class.qualifiedName,
                 "androidx.annotation.Keep",
@@ -93,51 +107,74 @@ class NovallesProcessor(
 
                 buildIn {
                     appendIn("@Keep")
-                    append("class ${model.simpleName.getShortName()}Inspector : Inspector<$name, ${viewHolder?.simpleName?.getShortName()}> {")
+                    append("class ${model.simpleName.getShortName()}Inspector : Inspector<$name, ${viewHolder.simpleName.getShortName()}> {")
                     newLine(1)
                     appendUp(
                         funHeaderBuilder(
                             isOverridden = true,
                             name = "inspectPayloads",
-                            args = listOf("payloads: Any?, instructor: $name, viewHolder: ${viewHolder?.simpleName?.getShortName() ?: "Any"}?, doOnBind: () -> Unit")
+                            args = listOf("payloads: Any?, instructor: $name, viewHolder: ${viewHolder.simpleName.getShortName()}?, doOnBind: () -> Unit")
                         )
                     )
                     appendUp("val payloadList = Novalles.extractPayload(payloads)")
                     appendIn("if (payloadList.isEmpty()) {")
                     appendUp("doOnBind()")
                     appendDown("}")
-                    appendIn("payloadList.forEach { payload -> ")
-                    appendUp("when (payload) {")
-                    incrementLevel()
+                    if (payloads.isNotEmpty()) {
+                        appendIn("payloadList.forEach { payload -> ")
+                        appendUp("when (payload) {")
+                        incrementLevel()
 
-                    payloads.forEach { payloading ->
-                        val payName =
-                            payloading.name.removeSuffix("Changed")
-                        val inspectorFunc = inspectorFunctions.find {
-                            it.arg.capitalizeFirst() == payName
-                        }
+                        payloads.forEach { payloading ->
+                            val payName =
+                                payloading.name.removeSuffix("Changed")
+                            val inspectorFunc = inspectorFunctions.find {
+                                it.arg.capitalizeFirst() == payName
+                            }
+                            val multipleFields = inspectorMultipleValues.find {
+                                it.target.capitalizeFirst() == payName
+                            }
 
-                        val viewHolderAutoBinder =
-                            viewHolderFun.find { it.simpleName.getShortName() == "set${payName}" && it.parameters.size == 1 }
+                            val viewHolderAutoBinder =
+                                viewHolderFun.find { it.simpleName.getShortName() == "set${payName}" && it.parameters.size == 1 }
 
 
-                        val action = when {
-                            inspectorFunc != null && inspectorFunc.isNullable == payloading.isNullable -> "instructor.${inspectorFunc.name}(payload.new${payName})"
-                            viewHolderAutoBinder != null && viewHolderAutoBinder.isFirstArgNullable() == payloading.isNullable -> "viewHolder?.set${payName}(payload.new${payName})"
-                            else -> "Unit".also {
-                                if (viewHolder != null) {
+                            val action = when {
+
+                                //BindOn without argument
+                                inspectorFunc != null && inspectorFunc.isNullable == null -> "instructor.${inspectorFunc.name}()"
+
+                                //BindOn with an argument (may be deprecated in the future)
+                                inspectorFunc != null && inspectorFunc.isNullable == payloading.isNullable -> {
                                     logger.warn(
-                                        "AutoBinding is on, but there was no function found for param $payName. Check Names and nullability params.",
+                                        "Functions annotated with BindOn should have no arguments from 0.7.0 version. Consider removing argument for ${inspectorFunc.name}",
+                                        classDeclaration
+                                    )
+                                    "instructor.${inspectorFunc.name}(payload.new${payName})"
+                                }
+
+                                //BindOnFields
+                                multipleFields != null -> "instructor.${multipleFields.name}()"
+
+                                //BindViewHolder
+                                with(viewHolderAutoBinder) {
+                                    this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$prefix${payName}$postfix"
+                                } -> {
+                                    "viewHolder?.$prefix${payName}$postfix(payload.new${payName})"
+                                }
+                                else -> "Unit".also {
+                                    logger.warn(
+                                        "There was no function found for UI field $payName. Put NonUIProperty or check all requirements: function name, arg nullability and etc.",
                                         classDeclaration
                                     )
                                 }
                             }
+                            appendIn("is ${payloading.name} -> $action")
                         }
-                        appendIn("is ${payloading.name} -> $action")
-                    }
 
-                    tagFunctions.forEach {
-                        appendIn("is ${it.second.declaration.qualifiedName?.asString()} -> instructor.${it.first}()")
+                        tagFunctions.forEach {
+                            appendIn("is ${it.second.declaration.qualifiedName?.asString()} -> instructor.${it.first}()")
+                        }
                     }
                     closeFunctions(0)
                 }
@@ -152,6 +189,25 @@ class NovallesProcessor(
             file.write(text.toByteArray())
 
             super.visitClassDeclaration(classDeclaration, data)
+        }
+
+        private fun extractViewHolderAnnotations(classDeclaration: KSClassDeclaration): Triple<KSClassDeclaration, String, String> {
+            return when {
+                classDeclaration.hasAnnotation(BindViewHolder::class) -> {
+                    val annotation = classDeclaration.findAnnotation(BindViewHolder::class) ?: errorHandler.throwUnexpectedError(classDeclaration)
+                    val viewHolder = (annotation.arguments.retrieveArg<KSType>("viewHolder")).declaration.closestClassDeclaration() ?: errorHandler.throwUnexpectedError(classDeclaration)
+                    val prefix = annotation.arguments.retrieveArg<String>("prefix")
+                    val postfix = annotation.arguments.retrieveArg<String>("postfix")
+                    Triple(viewHolder, prefix, postfix)
+                }
+                classDeclaration.hasAnnotation(AutoBindViewHolder::class) -> {
+                    val viewHolder = (classDeclaration.findAnnotation(AutoBindViewHolder::class)?.arguments?.first()?.value as KSType?)?.declaration?.closestClassDeclaration()
+                    Triple(viewHolder ?: errorHandler.throwUnexpectedError(classDeclaration), "set", "")
+                }
+                else -> {
+                    errorHandler.logError(classDeclaration, "This class should be annotated with BindViewHolder annotation.")
+                }
+            }
         }
 
     }
@@ -238,6 +294,7 @@ class NovallesProcessor(
 
                 val importsMap = mutableMapOf<String, String>()
 
+                //TODO: optimize
                 fields.forEach {
                     if (!it.type.element.isPrimitive()) {
                         val clazz = it.type.resolve().declaration.qualifiedName?.asString()
@@ -317,12 +374,14 @@ class NovallesProcessor(
                         }
                     )
 
-                    append(
-                        comparisons.joinToString(
-                            prefix = "${getTabs()}&& ",
-                            separator = "${getTabs()}&& "
+                    if (comparisons.isNotEmpty()) {
+                        append(
+                            comparisons.joinToString(
+                                prefix = "${getTabs()}&& ",
+                                separator = "${getTabs()}&& "
+                            )
                         )
-                    )
+                    }
                     appendDown("}")
 
 
@@ -336,30 +395,36 @@ class NovallesProcessor(
                             args = listOf("oldItem: $name", "newItem: Any")
                         )
                     )
-                    appendUp("return mutableListOf<$payloadsBaseInterface>().apply {")
-                    appendUp("if (newItem is $name) {")
-                    incrementLevel()
-                    fields.forEach {
-                        appendIn(" if (newItem.$it != oldItem.$it) {")
-                        appendUp(
-                            "add($payloadsName.${
-                                it.toString().capitalizeFirst()
-                            }Changed(newItem.$it))"
-                        )
-                        appendDown("}")
-                    }
-                    decomposedFieldsValues.forEach { parent ->
-                        parent.params.forEach {
-                            appendIn(" if (newItem.${parent.fieldName}${parent.dot}$it != oldItem.${parent.fieldName}${parent.dot}$it) {")
+                    if (fields.isNotEmpty() || decomposedFields.isNotEmpty()) {
+                        appendUp("return mutableListOf<$payloadsBaseInterface>().apply {")
+                        appendUp("if (newItem is $name) {")
+                        incrementLevel()
+                        fields.forEach {
+                            appendIn(" if (newItem.$it != oldItem.$it) {")
                             appendUp(
                                 "add($payloadsName.${
                                     it.toString().capitalizeFirst()
-                                }In${parent.fieldName.capitalizeFirst()}Changed(newItem.${parent.fieldName}${parent.dot}$it))"
+                                }Changed(newItem.$it))"
                             )
                             appendDown("}")
                         }
+                        decomposedFieldsValues.forEach { parent ->
+                            parent.params.forEach {
+                                appendIn(" if (newItem.${parent.fieldName}${parent.dot}$it != oldItem.${parent.fieldName}${parent.dot}$it) {")
+                                appendUp(
+                                    "add($payloadsName.${
+                                        it.toString().capitalizeFirst()
+                                    }In${parent.fieldName.capitalizeFirst()}Changed(newItem.${parent.fieldName}${parent.dot}$it))"
+                                )
+                                appendDown("}")
+                            }
+                        }
+                    } else {
+                        appendUp("return mutableListOf()")
+                        appendDown("}")
                     }
                     closeFunctions(1)
+                    newLine()
 
                     appendIn("@Suppress(\"UNCHECKED_CAST\")")
                     appendIn(
@@ -376,41 +441,43 @@ class NovallesProcessor(
                 }
                 newLine(2)
 
-                buildIn {
-                    val header = "sealed class $payloadsName : $payloadsBaseInterface {"
-                    appendIn(header)
-                    incrementLevel()
-                    fields.forEach {
-                        appendIn(
-                            dataClassConstructor(
-                                name = "${it.toString().capitalizeFirst()}Changed",
-                                parent = "${name}Payloads()",
-                                "new${it.toString().capitalizeFirst()}: ${it.writeAsVariable()}"
-                            )
-                        )
-                    }
-                    decomposedFieldsValues.forEach { parent ->
-                        parent.params.forEach {
+                if (fields.isNotEmpty() || decomposedFields.isNotEmpty()) {
+                    buildIn {
+                        val header = "sealed class $payloadsName : $payloadsBaseInterface {"
+                        appendIn(header)
+                        incrementLevel()
+                        fields.forEach {
                             appendIn(
                                 dataClassConstructor(
-                                    name = "${
-                                        it.toString().capitalizeFirst()
-                                    }In${parent.fieldName.capitalizeFirst()}Changed",
+                                    name = "${it.toString().capitalizeFirst()}Changed",
                                     parent = "${name}Payloads()",
-                                    "new${
-                                        it.toString().capitalizeFirst()
-                                    }In${parent.fieldName.capitalizeFirst()}: ${
-                                        it.writeAsVariable(
-                                            parent
-                                        )
-                                    }"
+                                    "new${it.toString().capitalizeFirst()}: ${it.writeAsVariable()}"
                                 )
                             )
                         }
+                        decomposedFieldsValues.forEach { parent ->
+                            parent.params.forEach {
+                                appendIn(
+                                    dataClassConstructor(
+                                        name = "${
+                                            it.toString().capitalizeFirst()
+                                        }In${parent.fieldName.capitalizeFirst()}Changed",
+                                        parent = "${name}Payloads()",
+                                        "new${
+                                            it.toString().capitalizeFirst()
+                                        }In${parent.fieldName.capitalizeFirst()}: ${
+                                            it.writeAsVariable(
+                                                parent
+                                            )
+                                        }"
+                                    )
+                                )
+                            }
+                        }
+                        appendDown("}")
                     }
-                    appendDown("}")
+                    newLine(2)
                 }
-                newLine(2)
             }
 
 
