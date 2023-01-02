@@ -1,12 +1,13 @@
 package com.flexeiprata.novalles.interfaces
 
-import com.flexeiprata.novalles.annotations.AutoBindViewHolder
+import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.annotations.Instruction
 import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.*
 import com.flexeiprata.novalles.utils.writingtools.tryNull
 import kotlin.jvm.internal.Reflection
 import kotlin.reflect.KClass
+import kotlin.reflect.full.createType
 import kotlin.reflect.full.primaryConstructor
 
 /**
@@ -14,7 +15,7 @@ import kotlin.reflect.full.primaryConstructor
  * To use Novalles, you should:
  * 1. Annotate your UI Model (which you use in your Adapter) with [UIModel] annotation. You can also configure it with other annotations.
  * 2. Call [Novalles.provideUiInterfaceFor], [Novalles.provideUiInterfaceForAs] or [Novalles.provideCachedUiInterfaceForAs] in your diff util to check [UIModelHelper.areItemsTheSame] and [UIModelHelper.areContentsTheSame] and call [UIModelHelper.changePayloads].
- * 3. Create an Instructor class with [Instructor] interface and [Instruction] annotation, where [Instruction.model] is your UI Model. You can also annotate it with [AutoBindViewHolder]
+ * 3. Create an Instructor class with [Instructor] interface and [Instruction] annotation, where [Instruction.model] is your UI Model. You should also annotate it with [BindViewHolder]
  * 4. To retrieve your [Inspector] class, pass your instructor to [Novalles.provideInspectorFromInstructor] in your onBindViewHolder() and call [Inspector.inspectPayloads] on your payloads.
  *
  * @see [UIModel]
@@ -65,25 +66,40 @@ object Novalles {
     }
 
     /**
-     * Provides an [Inspector] from your [Instructor]. It should be annotated with [Instruction] and with option annotation [AutoBindViewHolder].
+     * Provides an [Inspector] from your [Instructor]. It should be annotated with [Instruction] and with option annotation [BindViewHolder].
      */
     @Deprecated(
         message = "Function is deprecated. You can get inspector directly from UIModel class.",
         replaceWith = ReplaceWith("Novalles.provideInspectorFromUiModel(/*UIModel*/)")
     )
-    fun <R : Instructor> provideInspectorFromInstructor(instructor: KClass<R>): Inspector<R, Any> {
+    fun <R : Instructor> provideInspectorFromInstructor(instructor: KClass<R>): Inspector<R, Any, Any> {
         val raw = fabricate(clazz = instructor, InspectorOfPayloadsIndirect)
-        return tryNull { raw.provide<Inspector<R, Any>>() }
+        return tryNull { raw.provide<Inspector<R, Any, Any>>() }
             ?: throw IllegalArgumentException("There is no UI Inspectors")
     }
 
     /**
      * Provides an [Inspector] from your [UIModel]. It should be linked with only one [Instructor] via [Instruction].
      */
-    fun provideInspectorFromUiModel(UiModel: KClass<out Any>): Inspector<Instructor, Any> {
+    @Deprecated(
+        message = "This function is replaced with the similar one, but instead of direct usage of KClass it uses a type argument.",
+        replaceWith = ReplaceWith(
+            expression = "provideInspectorFromUiModel<UIModel>()"
+        )
+    )
+    fun provideInspectorFromUiModel(UiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
         val raw = fabricate(clazz = UiModel, InspectorOfPayloadsDirect)
-        return tryNull { raw.provide<Inspector<Instructor, Any>>() }
+        return tryNull { raw.provide<Inspector<Instructor, Any, Any>>() }
             ?: throw IllegalArgumentException("There is no UI Inspectors")
+    }
+
+    /**
+     * Provides an [Inspector] from your [UIModel]. It should be linked with only one [Instructor] via [Instruction].
+     */
+    @JvmName("provideInspectorFromUiModelGeneric")
+    @Suppress("UNCHECKED_CAST")
+    inline fun <reified M : Any> provideInspectorFromUiModel(): Inspector<Instructor, Any, M> {
+        return provideInspectorFromUiModel(M::class) as Inspector<Instructor, Any, M>
     }
 
     /**

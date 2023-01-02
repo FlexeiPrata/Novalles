@@ -99,16 +99,17 @@ If you completely rely on **BindViewHolder**, you can create the simplest Instru
 inner class AutoInstructor : Instructor
 ````
 
-5. Create an instance of the **Inspector** class using _Novalles.**provideInspectorFromUiModel**(uiModelClass:
-   KClass<>)_ function. Better to create it outside any function, so create it directly in the adapter itself.
+5. Create an instance of the **Inspector** class using _Novalles.**provideInspectorFromUiModel<uiModelClass>**()_ 
+function. Better to create it outside any function, so create it directly in the adapter itself.
 
 ````kotlin
-private val inspector = Novalles.provideInspectorFromUiModel(PictureUIModel::class)
+private val inspector = Novalles.provideInspectorFromUiModel<PictureUIModel>()
 ````
 
 6. Invoke _Inspector.**inspectPayloads**_ with 4 arguments: your payload,
    instructor, your viewHolder and lambda for action when payload is empty. This function calls corresponding functions in your viewHolder and instructor based
    on gathered payload.
+7. You can call **bind** function of your inspector to call all functions bound to fields in your viewHolder or instructor.
 
 ````kotlin
 override fun onBindViewHolder(
@@ -122,7 +123,7 @@ override fun onBindViewHolder(
         model
     )
     inspector.inspectPayloads(payloads, instructor, viewHolder = holder) {
-        holder.bind(model)
+        inspector.bind(model, holder, instructor)
         holder.setOnClickActions(model, onClick)
     }
 }
@@ -262,7 +263,7 @@ fun setImage(image: Int) {
 buildscript {
     dependencies {
         //You can use other Kotlin version.
-        classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:1.7.20-1.0.6")
+        classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:${version}")
     }
 }
 ````
@@ -291,8 +292,8 @@ allprojects {
 
 dependencies {
     //...
-    implementation 'com.github.flexeiprata:novalles:{currentVersion}'
-    ksp 'com.github.flexeiprata:novalles:{currentVersion}'
+    implementation "com.github.flexeiprata:novalles:${currentVersion}"
+    ksp "com.github.flexeiprata:novalles:${currentVersion}"
     //...
 }
 

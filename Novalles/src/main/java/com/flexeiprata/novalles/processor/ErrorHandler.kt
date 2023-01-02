@@ -1,7 +1,7 @@
 package com.flexeiprata.novalles.processor
 
 import com.flexeiprata.novalles.annotations.AutoBindViewHolder
-import com.flexeiprata.novalles.annotations.BindOn
+import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.utils.KUIAnnotations
 import com.flexeiprata.novalles.utils.isPrimitive
 import com.flexeiprata.novalles.utils.writingtools.findAnnotation
@@ -12,8 +12,6 @@ import com.google.devtools.ksp.isInternal
 import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.*
-import kotlin.Error
-import kotlin.math.E
 
 class ErrorHandler(private val logger: KSPLogger) {
 
@@ -43,10 +41,7 @@ class ErrorHandler(private val logger: KSPLogger) {
             declaration.isAbstract() || !declaration.isPublic() || declaration.isInternal() -> Error.Critical(
                 "This instructor is not valid."
             )
-            allBindOnFunctionAreSingleArgument(declaration) -> Error.Critical(
-                "All @BindOn function should have only one param and have public visibility"
-            )
-            doesNotHaveValidHolder(declaration) -> Error.Critical(
+            doesNotHaveValidHolder(declaration) || doesNotHaveValidHolderDeprecated(declaration) -> Error.Critical(
                 "Provided ViewHolder should be available for UI interfaces"
             )
             else -> Error.Clear
@@ -109,16 +104,24 @@ class ErrorHandler(private val logger: KSPLogger) {
     }
 
     private fun doesNotHaveValidHolder(declaration: KSClassDeclaration): Boolean {
+        return (declaration.findAnnotation(BindViewHolder::class)?.arguments?.first()?.value as KSType?)?.declaration?.let {
+            !it.isPublic() || it.isInternal()
+        } ?: false
+    }
+
+    @Suppress("DEPRECATION")
+    private fun doesNotHaveValidHolderDeprecated(declaration: KSClassDeclaration): Boolean {
         return (declaration.findAnnotation(AutoBindViewHolder::class)?.arguments?.first()?.value as KSType?)?.declaration?.let {
             !it.isPublic() || it.isInternal()
         } ?: false
     }
 
-    private fun allBindOnFunctionAreSingleArgument(declaration: KSClassDeclaration): Boolean {
+    //Now deprecated
+    /*private fun allBindOnFunctionAreSingleArgument(declaration: KSClassDeclaration): Boolean {
         return declaration.getAllFunctions().filter { it.annotations.find { it.shortName.asString() == BindOn::class.simpleName } != null }.find {
-            it.parameters.size > 1 || !it.isPublic()
+            it.parameters.isNotEmpty() || !it.isPublic()
         } != null
-    }
+    }*/
 
     private fun hasDecomposedPrimitives(declaration: KSClassDeclaration): Boolean {
         return declaration.primaryConstructor?.parameters?.find { parameter ->

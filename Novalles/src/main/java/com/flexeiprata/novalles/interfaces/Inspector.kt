@@ -13,9 +13,9 @@ interface Instructor
  *
  * @see [Instructor]
  * @see [Instruction]
- * @see [AutoBindViewHolder]
+ * @see [BindViewHolder]
  */
-interface Inspector <I: Instructor, V: Any> {
+interface Inspector <I: Instructor, V: Any, M: Any> {
 
     /**
      * For each payload in [payloads] list call a viewHolder corresponding function.
@@ -27,12 +27,21 @@ interface Inspector <I: Instructor, V: Any> {
      * 4. Default Any? from onBindViewHolder.
      * The corresponding function is chosen in 2 ways:
      * 1. You annotated one of [Instructor] function with [BindOn] annotation, where [BindOn.on] is string value of the corresponding UI model field.
-     * 2. You annotated your [Instructor] with [AutoBindViewHolder], where corresponding function to each field is set${fieldName}() function in [AutoBindViewHolder.viewHolder]. Functions should be public with only one argument.
-     * Note: when you cannot use [AutoBindViewHolder] functionality, you should rely on [Instructor] functions.
+     * 2. You annotated your [Instructor] with [BindViewHolder], where corresponding function to each field is set${fieldName}() function in [BindViewHolder.viewHolder]. Functions should be public with only one argument.
+     * Note: when you cannot use [BindViewHolder] functionality, you should rely on [Instructor] functions.
      *
-     * @see [AutoBindViewHolder]
+     * @see [BindViewHolder]
      * @see [Novalles.provideInspectorFromInstructor]
      * @see [Decompose]
      */
     fun inspectPayloads(payloads: Any?, instructor: I, viewHolder: V? = null, doOnBind: () -> Unit)
+
+    /**
+     * This functions will call all viewHolder's and [Instructor]'s functions that are bound to fields. It can be used to set initial UI for your viewHolder.
+     *
+     * @see [BindViewHolder]
+     * @see [Instructor]
+     * @see [BindOn]
+     */
+    fun bind(model: M, viewHolder: V, instructor: I)
 }

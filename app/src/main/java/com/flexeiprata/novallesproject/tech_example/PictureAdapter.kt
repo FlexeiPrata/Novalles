@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView.ViewHolder
 import com.flexeiprata.novalles.annotations.*
 import com.flexeiprata.novalles.interfaces.Instructor
 import com.flexeiprata.novalles.interfaces.Novalles
+import com.flexeiprata.novalles.interfaces.Novalles.provideInspectorFromUiModel
 import com.flexeiprata.novallesproject.databinding.ItemPictureBinding
 
 class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
@@ -20,7 +21,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         DefaultDiffUtil(PictureUIModel::class)
     ) {
 
-    private val inspector = Novalles.provideInspectorFromUiModel(PictureUIModel::class)
+    private val inspector = provideInspectorFromUiModel<PictureUIModel>()
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PictureViewHolder {
         return PictureViewHolder(
@@ -38,12 +39,9 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         payloads: MutableList<Any>
     ) {
         val model = currentList[position] as PictureUIModel
-        val instructor = PictureInstructor(
-            viewHolder = holder,
-            model
-        )
+        val instructor = PictureInstructor(viewHolder = holder, model)
         inspector.inspectPayloads(payloads, instructor, viewHolder = holder) {
-            holder.bind(model)
+            inspector.bind(model, holder, instructor)
             holder.setOnClickActions(model, onClick)
         }
     }
@@ -72,15 +70,6 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
 
     inner class PictureViewHolder(private val binding: ItemPictureBinding) :
         ViewHolder(binding.root) {
-
-        fun bind(item: PictureUIModel) {
-            setImage(item.image)
-            setLeftInLine(item.line.left)
-            setRightInLine(item.line.right)
-            setTitle("<b>${item.title}</b> (${item.tag})")
-            setDesc(item.desc)
-            setLikes(item.likes)
-        }
 
         fun setImage(image: Int) {
             binding.image.animateColors(image)

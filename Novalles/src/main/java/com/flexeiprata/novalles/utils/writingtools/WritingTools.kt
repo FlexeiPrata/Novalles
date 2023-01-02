@@ -76,3 +76,7 @@ fun StringBuilder.add(text: String) {
 fun String.capitalizeFirst(): String {
     return this.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
 }
+
+fun String.lowercaseFirst(): String {
+    return this.replaceFirstChar { if (it.isUpperCase()) it.lowercase(Locale.ROOT) else it.toString() }
+}
