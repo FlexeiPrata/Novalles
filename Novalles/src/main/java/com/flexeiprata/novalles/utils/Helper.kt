@@ -17,6 +17,12 @@ data class Payloading(
     val isNullable: Boolean
 )
 
+data class CachedField(
+    val name: String,
+    val isNullable: Boolean,
+    val variableName: String? = null,
+)
+
 data class InspectorFunData(
     val name: String,
     val arg: String,

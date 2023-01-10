@@ -81,13 +81,7 @@ object Novalles {
     /**
      * Provides an [Inspector] from your [UIModel]. It should be linked with only one [Instructor] via [Instruction].
      */
-    @Deprecated(
-        message = "This function is replaced with the similar one, but instead of direct usage of KClass it uses a type argument.",
-        replaceWith = ReplaceWith(
-            expression = "provideInspectorFromUiModel<UIModel>()"
-        )
-    )
-    fun provideInspectorFromUiModel(UiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
+    fun provideInspectorFromUiModelRaw(UiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
         val raw = fabricate(clazz = UiModel, InspectorOfPayloadsDirect)
         return tryNull { raw.provide<Inspector<Instructor, Any, Any>>() }
             ?: throw IllegalArgumentException("There is no UI Inspectors")
@@ -96,10 +90,9 @@ object Novalles {
     /**
      * Provides an [Inspector] from your [UIModel]. It should be linked with only one [Instructor] via [Instruction].
      */
-    @JvmName("provideInspectorFromUiModelGeneric")
     @Suppress("UNCHECKED_CAST")
     inline fun <reified M : Any> provideInspectorFromUiModel(): Inspector<Instructor, Any, M> {
-        return provideInspectorFromUiModel(M::class) as Inspector<Instructor, Any, M>
+        return provideInspectorFromUiModelRaw(M::class) as Inspector<Instructor, Any, M>
     }
 
     /**

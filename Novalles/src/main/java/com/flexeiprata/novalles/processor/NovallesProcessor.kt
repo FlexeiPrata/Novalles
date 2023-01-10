@@ -13,9 +13,6 @@ import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
 
-//TODO: replace returns with exceptions
-//TODO: optimize code analysis (f.e. resolve())
-//TODO: extract logic to different functions
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
     private val logger: KSPLogger,
@@ -23,6 +20,7 @@ class NovallesProcessor(
 ) : SymbolProcessor {
 
     private val payloadsMap = mutableMapOf<String, MutableList<Payloading>>()
+    private val cachedFieldsMap = mutableMapOf<String, MutableList<CachedField>>()
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
 
@@ -91,6 +89,7 @@ class NovallesProcessor(
             val viewHolderFun =
                 viewHolder.getAllFunctions().filterNot { !it.isPublic() }
             val payloads = payloadsMap[model.simpleName.getShortName()] ?: emptyList()
+            val cachedFields = cachedFieldsMap[model.simpleName.getShortName()] ?: emptyList()
 
             //Imports
             val listOfImports = listOfNotNull(
@@ -192,12 +191,9 @@ class NovallesProcessor(
                         )
                     )
                     incrementLevel()
-                    payloads.mapNotNull { payloading ->
-                        val payName = payloading.name.removeSuffix("Changed")
-                        val modelFieldName = when (payName.contains("In")) {
-                            false -> payName.lowercaseFirst()
-                            true -> payName.split("In").map { it.lowercaseFirst() }.reversed().joinToString(separator = ".")
-                        }
+                    cachedFields.mapNotNull { payloading ->
+                        val payName = payloading.name.capitalizeFirst()
+                        val modelFieldName = payloading.variableName ?: payloading.name
 
                         val inspectorFunc = inspectorFunctions.find {
                             it.arg.capitalizeFirst() == payName
@@ -328,23 +324,44 @@ class NovallesProcessor(
             val payloadsBaseInterface = "BasePayload"
 
             val payList = mutableListOf<Payloading>()
+            val cachedFields = mutableListOf<CachedField>()
             payloadsMap[name] = payList
+            cachedFieldsMap[name] = cachedFields
             payList.addAll(
                 fields.map {
+                    val typeResolved = it.type.resolve()
+                    cachedFields.add(
+                        CachedField(
+                            it.toString(),
+                            typeResolved.isMarkedNullable
+                        )
+                    )
                     Payloading(
                         "${it.toString().capitalizeFirst()}Changed",
-                        it.type.resolve().isMarkedNullable
+                        typeResolved.isMarkedNullable
                     )
                 }
             )
             decomposedFieldsValues.forEach { parent ->
                 payList.addAll(
                     parent.params.map {
+                        val typeResolved = it.type.resolve()
+
+                        cachedFields.add(
+                            CachedField(
+                                "${
+                                    it.toString().capitalizeFirst()
+                                }In${parent.fieldName.capitalizeFirst()}",
+                                parent.nullable || typeResolved.isMarkedNullable,
+                                "${parent.fieldName}.$it"
+                            )
+                        )
+
                         Payloading(
                             "${
                                 it.toString().capitalizeFirst()
                             }In${parent.fieldName.capitalizeFirst()}Changed",
-                            parent.nullable || it.type.resolve().isMarkedNullable
+                            parent.nullable || typeResolved.isMarkedNullable
                         )
                     }
                 )
