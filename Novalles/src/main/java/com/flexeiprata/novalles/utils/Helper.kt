@@ -26,7 +26,8 @@ data class CachedField(
 data class InspectorFunData(
     val name: String,
     val arg: String,
-    val isNullable: Boolean?
+    val isNullable: Boolean?,
+    val isBoolean: Boolean? = null
 )
 
 data class InspectorFunDataFlat(

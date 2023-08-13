@@ -59,7 +59,8 @@ class DefaultDiffUtil<T : BaseUiModel>(uiModel: KClass<T>) : DiffUtil.ItemCallba
    Model_ class as the annotation argument. You can also annotate it with **BindViewHolder** _(See corresponding
    section for more details)_. In this class you should create functions, that will be called on a value change. 
 Use **BindOn** annotation to tell Novalles which function should be called when a value has been changed, value name should
-   be passed as the first annotation argument.
+   be passed as the first annotation argument. By default, bound function will be called both in _bind_ and _payloads_ flows.
+If you want to differ them, you can add a **boolean argument** in this function. **True** stands for bind call, **False** for payloads call.
 
 ````kotlin
 @Instruction(PictureUIModel::class)
@@ -69,12 +70,24 @@ inner class PictureInstructor(
     private val uiModel: PictureUIModel
 ) : Instructor {
 
-    //This function will be called, when title changed.
+    //This function will be called, when title changes.
     @BindOn("title")
     fun setTitleComplex() {
         val realDesc = "<b>${uiModel.title}</b> (${uiModel.tag})"
         viewHolder.setTitle(realDesc)
     }
+
+    //This function will be called when image changes. It will be called with "true" if it is called from bind,
+    //And with "false" if called from payloads.
+    @BindOn("image")
+    fun bindTestImage(isFromBind: Boolean) {
+        if (isFromBind) {
+            viewHolder.setImage(uiModel.image)
+        } else {
+            viewHolder.setImageAnimated(uiModel.image)
+        }
+    }
+    
 
 }
 ````
@@ -133,7 +146,8 @@ override fun onBindViewHolder(
 
 Class annotated with it is considered to be the instruction how to handle payloads for UI Model. It should also
 implement **Instructor** interface. Your functions should be names as _{prefix}{PropertyName}{postfix}_.
-The default prefix is **set**. There is no default postfix. 
+The default prefix is **set**. There is no default postfix. By default, bound function will be called both in _bind_ and _payloads_ flows.
+If you want to differ them, you can change prefix: **bind** stands for bind call, **set _(or other configured)_** for payloads call.
 
 ````kotlin
 @UIModel
@@ -141,6 +155,7 @@ data class PictureUIModel(
     @PrimaryTag val tag: String,
     //...
     val desc: String,
+    val image: String,
     //...
 ) : BaseUiModel {
 
@@ -154,6 +169,16 @@ data class PictureUIModel(
         //This function will be called, if desc changes.
         fun setDesc(desc: String) {
             binding.desc.text = desc
+        }
+
+        //This function will be called on bind.
+        fun bindImage(image: String) {
+            binding.image.load("image")
+        }
+
+        //This function will be called, if image changes.
+        fun setImage(image: String) {
+            binding.image.loadAnimated("image")
         }
 
         //...

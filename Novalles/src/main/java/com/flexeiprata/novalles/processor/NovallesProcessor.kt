@@ -9,6 +9,7 @@ import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
@@ -53,6 +54,7 @@ class NovallesProcessor(
             val core = classDeclaration.findAnnotation(Instruction::class) ?: throwUnexpected()
             val model = (core.arguments.first().value as KSType).declaration.closestClassDeclaration() ?: throwUnexpected()
             val (viewHolder, prefix, postfix) = extractViewHolderAnnotations(classDeclaration)
+            val bindPrefix = "bind" //May be customisable in future
             val name = classDeclaration.simpleName.getShortName()
 
             val declarationFunctions = classDeclaration.getAllFunctions()
@@ -63,7 +65,8 @@ class NovallesProcessor(
                     InspectorFunData(
                         name = it.simpleName.getShortName(),
                         arg = it.annotations.first().arguments.first().value as String,
-                        isNullable = it.parameters.firstOrNull()?.type?.resolve()?.isMarkedNullable
+                        isNullable = it.parameters.firstOrNull()?.type?.resolve()?.isMarkedNullable,
+                        isBoolean = it.parameters.firstOrNull()?.type?.toString() == "Boolean"
                     )
                 }.toList()
 
@@ -140,7 +143,7 @@ class NovallesProcessor(
                             }
 
                             val viewHolderAutoBinder =
-                                viewHolderFun.find { it.simpleName.getShortName() == "set${payName}" && it.parameters.size == 1 }
+                                viewHolderFun.find { it.simpleName.getShortName() == "$prefix${payName}$postfix" && it.parameters.size == 1 }
 
 
                             val action = when {
@@ -148,13 +151,9 @@ class NovallesProcessor(
                                 //BindOn without argument
                                 inspectorFunc != null && inspectorFunc.isNullable == null -> "instructor.${inspectorFunc.name}()"
 
-                                //BindOn with an argument (may be deprecated in the future)
-                                inspectorFunc != null && inspectorFunc.isNullable == payloading.isNullable -> {
-                                    logger.warn(
-                                        "Functions annotated with BindOn should have no arguments from 0.7.0 version. Consider removing argument for ${inspectorFunc.name}",
-                                        classDeclaration
-                                    )
-                                    "instructor.${inspectorFunc.name}(payload.new${payName})"
+                                //BindOn with an bind argument
+                                inspectorFunc != null && inspectorFunc.isBoolean == true  -> {
+                                    "instructor.${inspectorFunc.name}(false)"
                                 }
 
                                 //BindOnFields
@@ -182,6 +181,7 @@ class NovallesProcessor(
                     }
                     closeFunctions(1)
 
+                    //Bind block
                     newLine()
                     appendIn(
                         funHeaderBuilder(
@@ -202,29 +202,40 @@ class NovallesProcessor(
                             it.target.capitalizeFirst() == payName
                         }
 
-                        val viewHolderAutoBinder =
-                            viewHolderFun.find { it.simpleName.getShortName() == "set${payName}" && it.parameters.size == 1 }
+                        val viewHolderBaseBindCondition = { function: KSFunctionDeclaration ->
+                            function.simpleName.getShortName() == "$bindPrefix${payName}$postfix" && function.parameters.size == 1
+                        }
 
+                        val viewHolderPostBindCondition = { function: KSFunctionDeclaration ->
+                            function.simpleName.getShortName() == "$prefix${payName}$postfix" && function.parameters.size == 1
+                        }
 
+                        val viewHolderBaseAutoBinder = viewHolderFun.find(viewHolderBaseBindCondition)
+                        val viewHolderDefaultBinder = viewHolderFun.find(viewHolderPostBindCondition)
+
+                        //TODO: Bind on with boolean argument
                         when {
 
                             //BindOn without argument
                             inspectorFunc != null && inspectorFunc.isNullable == null -> "instructor.${inspectorFunc.name}()"
 
-                            //BindOn with an argument (may be deprecated in the future)
-                            inspectorFunc != null && inspectorFunc.isNullable == payloading.isNullable -> {
-                                logger.warn(
-                                    "Functions annotated with BindOn should have no arguments from 0.7.0 version. Consider removing argument for ${inspectorFunc.name}",
-                                    classDeclaration
-                                )
-                                "instructor.${inspectorFunc.name}(model.${payName})"
+                            //BindOn with bind argument
+                            inspectorFunc != null && inspectorFunc.isBoolean == true -> {
+                                "instructor.${inspectorFunc.name}(true)"
                             }
 
                             //BindOnFields
                             multipleFields != null -> "instructor.${multipleFields.name}()"
 
+                            //BindViewHolder (binder)
+                            with(viewHolderBaseAutoBinder) {
+                                this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$bindPrefix${payName}$postfix"
+                            } -> {
+                                "viewHolder.$bindPrefix${payName}$postfix(model.${modelFieldName})"
+                            }
+
                             //BindViewHolder
-                            with(viewHolderAutoBinder) {
+                            with(viewHolderDefaultBinder) {
                                 this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$prefix${payName}$postfix"
                             } -> {
                                 "viewHolder.$prefix${payName}$postfix(model.${modelFieldName})"

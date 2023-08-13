@@ -18,7 +18,8 @@ annotation class Instruction(val model: KClass<*>)
 /**
  * This annotation should be used inside [Instruction]/[Instructor] class to show Novalles how to handle payload.
  * The annotated function should represent an action, that should be performed when [on] value of your UI Model has been changed.
- * Your function should have no arguments (or have only one argument of [on] value as a deprecated option), but can use any external variables or objects.
+ * Your function can have no arguments, but can use any external variables or objects.
+ * Your function can have one boolean argument, which represents when function has been called (true from bind, false from payloads)
  * You can bind more than one field with [BindOnFields].
  *
  * @see [BindOnFields]
@@ -28,7 +29,7 @@ annotation class Instruction(val model: KClass<*>)
 annotation class BindOn(val on: String)
 
 /**
- * Used as the [BindOn] annotation, but can bind more than one field.
+ * Use as the [BindOn] annotation, but can bind more than one field.
  */
 @Target(AnnotationTarget.FUNCTION)
 @Retention(AnnotationRetention.SOURCE)
@@ -36,8 +37,9 @@ annotation class BindOnFields(val on: Array<String>)
 
 /**
  * This annotation helps your [Instructor] to handle payloads directly with viewHolder functions.
- * Your function from [viewHolder] will be automatically bind in [Inspector] if it corresponds the following pattern set${FieldName}(field: FieldType).
- * You'll get warnings during ksp generating, if there will be no corresponding functions in [Instructor] and your [viewHolder].
+ * Your function from [viewHolder] will be automatically bind in [Inspector] if it corresponds the declared pattern.
+ * Novalles can differ bind and change functions (with "bind" and "set" prefixes by default).
+ * You'll get warnings during ksp generating, if there are no corresponding functions in [Instructor] and your [viewHolder].
  *
  * @see [Decompose]
  * @see [BindViewHolder]
@@ -55,6 +57,7 @@ annotation class AutoBindViewHolder(val viewHolder: KClass<*>)
  * This annotation helps your [Instructor] to handle payloads directly with viewHolder functions.
  * Your function from [viewHolder] will be automatically bind in [Inspector] if it corresponds the following pattern ${prefix}${FieldName}${postfix}(field: FieldType).
  * The default [prefix] is "set". There is no any default [postfix].
+ * The default bind prefix is "bind". This can be changed in future.
  * You'll get warnings during ksp generating, if there will be no corresponding functions in [Instructor] and your [viewHolder].
  *
  * @see [Decompose]

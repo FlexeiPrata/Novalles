@@ -34,7 +34,7 @@ object Novalles {
      */
     fun <T : Any> provideUiInterfaceFor(clazz: KClass<T>): UIModelHelper<T> {
         val raw = fabricate(clazz, UIModelInterface)
-        return raw.provide() ?: throw IllegalArgumentException("There is no UI interfaces")
+        return raw.provide() ?: throw IllegalArgumentException("There is no UI interfaces. If it happened on the release build, check if you keep your UIModels' names.")
     }
 
     /**
@@ -46,7 +46,7 @@ object Novalles {
     fun <T : Any, R : Any> provideUiInterfaceForAs(clazz: KClass<T>): UIModelHelper<R> {
         val raw = fabricate(clazz, UIModelInterface)
         return raw.provide() as? UIModelHelper<R>?
-            ?: throw IllegalArgumentException("There is no UI interfaces")
+            ?: throw IllegalArgumentException("There is no UI interfaces. If it happened on the release build, check if you keep your UIModels' names.")
     }
 
     /**

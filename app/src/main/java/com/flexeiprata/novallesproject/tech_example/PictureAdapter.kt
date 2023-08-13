@@ -21,8 +21,6 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         DefaultDiffUtil(PictureUIModel::class)
     ) {
 
-    private val inspector = provideInspectorFromUiModel<PictureUIModel>()
-
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PictureViewHolder {
         return PictureViewHolder(
             ItemPictureBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -40,6 +38,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
     ) {
         val model = currentList[position] as PictureUIModel
         val instructor = PictureInstructor(viewHolder = holder, model)
+        val inspector = provideInspectorFromUiModel<PictureUIModel>()
         inspector.inspectPayloads(payloads, instructor, viewHolder = holder) {
             inspector.bind(model, holder, instructor)
             holder.setOnClickActions(model, onClick)
@@ -65,6 +64,14 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
             viewHolder.setLikes(0)
         }
 
+        @BindOn("image")
+        fun bindTestImage(isFromBind: Boolean) {
+            if (isFromBind) {
+                viewHolder.setImage(uiModel.image)
+            } else {
+                viewHolder.setImage(uiModel.image)
+            }
+        }
 
     }
 
@@ -106,6 +113,10 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
                     .start()
                 text = likes.toString()
             }
+        }
+
+        fun bindLikes(likes: Int) {
+            binding.likes.text = likes.toString()
         }
 
         fun setOnClickActions(item: PictureUIModel, onClick: (PictureUIModel) -> Unit) {

@@ -116,19 +116,11 @@ class ErrorHandler(private val logger: KSPLogger) {
         } ?: false
     }
 
-    //Now deprecated
-    /*private fun allBindOnFunctionAreSingleArgument(declaration: KSClassDeclaration): Boolean {
-        return declaration.getAllFunctions().filter { it.annotations.find { it.shortName.asString() == BindOn::class.simpleName } != null }.find {
-            it.parameters.isNotEmpty() || !it.isPublic()
-        } != null
-    }*/
-
     private fun hasDecomposedPrimitives(declaration: KSClassDeclaration): Boolean {
         return declaration.primaryConstructor?.parameters?.find { parameter ->
             parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.Decompose.name } != null && parameter.type.isPrimitive()
         } != null
     }
-
 
     private sealed class Error {
         data class Warnings(val messages: List<String>) : Error()
