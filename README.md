@@ -145,8 +145,10 @@ override fun onBindViewHolder(
 ### BindViewHolder
 
 Class annotated with it is considered to be the instruction how to handle payloads for UI Model. It should also
-implement **Instructor** interface. Your functions should be names as _{prefix}{PropertyName}{postfix}_.
-The default prefix is **set**. There is no default postfix. By default, bound function will be called both in _bind_ and _payloads_ flows.
+implement **Instructor** interface. Your functions should be names as _{prefix}{PropertyName}_.
+The default prefix is **set**. By default, bound function will be called both in _bind_ and _payloads_ flows.
+The default bindPrefix is **bind**.
+You'll get warnings during ksp generating, if there will be no corresponding functions in [Instructor] and your [viewHolder].
 If you want to differ them, you can change prefix: **bind** stands for bind call, **set _(or other configured)_** for payloads call.
 
 ````kotlin
@@ -192,7 +194,7 @@ Value, annotated with **Decompose** will be decomposed with its own values. For 
 properties, they will be used in any Novalles' actions separately:
 Novalles will generate 2 different payloads objects in _UIModelHelper.**changePayloads**_, compare them in _UIModelHelper.**areContentsTheSame**_ separately.
 
-Also, if you use **BindViewHolder**, you should use _{prefix}${FieldName}In${DecomposedFieldName}{postfix}()_ functions in
+Also, if you use **BindViewHolder**, you should use _{prefix}${FieldName}In${DecomposedFieldName}()_ functions in
 your viewHolder for each field of your decomposed value.
 
 ````kotlin

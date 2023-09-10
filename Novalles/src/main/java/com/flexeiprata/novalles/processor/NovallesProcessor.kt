@@ -53,8 +53,7 @@ class NovallesProcessor(
 
             val core = classDeclaration.findAnnotation(Instruction::class) ?: throwUnexpected()
             val model = (core.arguments.first().value as KSType).declaration.closestClassDeclaration() ?: throwUnexpected()
-            val (viewHolder, prefix, postfix) = extractViewHolderAnnotations(classDeclaration)
-            val bindPrefix = "bind" //May be customisable in future
+            val (viewHolder, prefix, bindPrefix) = extractViewHolderAnnotations(classDeclaration)
             val name = classDeclaration.simpleName.getShortName()
 
             val declarationFunctions = classDeclaration.getAllFunctions()
@@ -143,7 +142,7 @@ class NovallesProcessor(
                             }
 
                             val viewHolderAutoBinder =
-                                viewHolderFun.find { it.simpleName.getShortName() == "$prefix${payName}$postfix" && it.parameters.size == 1 }
+                                viewHolderFun.find { it.simpleName.getShortName() == "$prefix${payName}" && it.parameters.size == 1 }
 
 
                             val action = when {
@@ -161,9 +160,9 @@ class NovallesProcessor(
 
                                 //BindViewHolder
                                 with(viewHolderAutoBinder) {
-                                    this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$prefix${payName}$postfix"
+                                    this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$prefix${payName}"
                                 } -> {
-                                    "viewHolder?.$prefix${payName}$postfix(payload.new${payName})"
+                                    "viewHolder?.$prefix${payName}(payload.new${payName})"
                                 }
                                 else -> "Unit".also {
                                     logger.warn(
@@ -203,17 +202,16 @@ class NovallesProcessor(
                         }
 
                         val viewHolderBaseBindCondition = { function: KSFunctionDeclaration ->
-                            function.simpleName.getShortName() == "$bindPrefix${payName}$postfix" && function.parameters.size == 1
+                            function.simpleName.getShortName() == "$bindPrefix${payName}" && function.parameters.size == 1
                         }
 
                         val viewHolderPostBindCondition = { function: KSFunctionDeclaration ->
-                            function.simpleName.getShortName() == "$prefix${payName}$postfix" && function.parameters.size == 1
+                            function.simpleName.getShortName() == "$prefix${payName}" && function.parameters.size == 1
                         }
 
                         val viewHolderBaseAutoBinder = viewHolderFun.find(viewHolderBaseBindCondition)
                         val viewHolderDefaultBinder = viewHolderFun.find(viewHolderPostBindCondition)
 
-                        //TODO: Bind on with boolean argument
                         when {
 
                             //BindOn without argument
@@ -229,16 +227,16 @@ class NovallesProcessor(
 
                             //BindViewHolder (binder)
                             with(viewHolderBaseAutoBinder) {
-                                this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$bindPrefix${payName}$postfix"
+                                this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$bindPrefix${payName}"
                             } -> {
-                                "viewHolder.$bindPrefix${payName}$postfix(model.${modelFieldName})"
+                                "viewHolder.$bindPrefix${payName}(model.${modelFieldName})"
                             }
 
                             //BindViewHolder
                             with(viewHolderDefaultBinder) {
-                                this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$prefix${payName}$postfix"
+                                this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$prefix${payName}"
                             } -> {
-                                "viewHolder.$prefix${payName}$postfix(model.${modelFieldName})"
+                                "viewHolder.$prefix${payName}(model.${modelFieldName})"
                             }
                             else -> null
                         }
@@ -261,19 +259,14 @@ class NovallesProcessor(
             super.visitClassDeclaration(classDeclaration, data)
         }
 
-        @Suppress("DEPRECATION")
         private fun extractViewHolderAnnotations(classDeclaration: KSClassDeclaration): Triple<KSClassDeclaration, String, String> {
             return when {
                 classDeclaration.hasAnnotation(BindViewHolder::class) -> {
                     val annotation = classDeclaration.findAnnotation(BindViewHolder::class) ?: errorHandler.throwUnexpectedError(classDeclaration)
                     val viewHolder = (annotation.arguments.retrieveArg<KSType>("viewHolder")).declaration.closestClassDeclaration() ?: errorHandler.throwUnexpectedError(classDeclaration)
                     val prefix = annotation.arguments.retrieveArg<String>("prefix")
-                    val postfix = annotation.arguments.retrieveArg<String>("postfix")
+                    val postfix = annotation.arguments.retrieveArg<String>("bindPrefix")
                     Triple(viewHolder, prefix, postfix)
-                }
-                classDeclaration.hasAnnotation(AutoBindViewHolder::class) -> {
-                    val viewHolder = (classDeclaration.findAnnotation(AutoBindViewHolder::class)?.arguments?.first()?.value as KSType?)?.declaration?.closestClassDeclaration()
-                    Triple(viewHolder ?: errorHandler.throwUnexpectedError(classDeclaration), "set", "")
                 }
                 else -> {
                     errorHandler.logError(classDeclaration, "This class should be annotated with BindViewHolder annotation.")

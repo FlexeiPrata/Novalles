@@ -37,32 +37,14 @@ annotation class BindOnFields(val on: Array<String>)
 
 /**
  * This annotation helps your [Instructor] to handle payloads directly with viewHolder functions.
- * Your function from [viewHolder] will be automatically bind in [Inspector] if it corresponds the declared pattern.
- * Novalles can differ bind and change functions (with "bind" and "set" prefixes by default).
- * You'll get warnings during ksp generating, if there are no corresponding functions in [Instructor] and your [viewHolder].
- *
- * @see [Decompose]
- * @see [BindViewHolder]
- */
-@Target(AnnotationTarget.CLASS)
-@Retention(AnnotationRetention.SOURCE)
-@Deprecated(
-    "The BindViewHolder annotations have become mandatory for any Instructor. Consider using BindViewHolder annotation instead.",
-    replaceWith = ReplaceWith("BindViewHolder")
-)
-annotation class AutoBindViewHolder(val viewHolder: KClass<*>)
-
-/**
- * The replacement for [AutoBindViewHolder].
- * This annotation helps your [Instructor] to handle payloads directly with viewHolder functions.
  * Your function from [viewHolder] will be automatically bind in [Inspector] if it corresponds the following pattern ${prefix}${FieldName}${postfix}(field: FieldType).
- * The default [prefix] is "set". There is no any default [postfix].
- * The default bind prefix is "bind". This can be changed in future.
+ * The default [prefix] is "set".
+ * The default [bindPrefix] is "bind".
  * You'll get warnings during ksp generating, if there will be no corresponding functions in [Instructor] and your [viewHolder].
  *
  * @see [Decompose]
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
-annotation class BindViewHolder(val viewHolder: KClass<*>, val prefix: String = "set", val postfix: String = "")
+annotation class BindViewHolder(val viewHolder: KClass<*>, val prefix: String = "set", val bindPrefix: String = "bind")
 

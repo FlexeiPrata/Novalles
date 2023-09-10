@@ -1,6 +1,6 @@
 package com.flexeiprata.novalles.utils.writingtools
 
-fun funHeaderBuilder(
+internal fun funHeaderBuilder(
     extension: String? = null,
 
     name: String,
@@ -23,7 +23,7 @@ fun funHeaderBuilder(
     }.toString()
 }
 
-fun funHeaderBuilder(
+internal fun funHeaderBuilder(
     name: String,
     isOverridden: Boolean = false,
     extension: String? = null,
@@ -59,7 +59,7 @@ fun funHeaderBuilder(
     }.toString()
 }
 
-fun dataClassConstructor(
+internal fun dataClassConstructor(
     name: String,
     parent: String? = null,
     vararg data: String

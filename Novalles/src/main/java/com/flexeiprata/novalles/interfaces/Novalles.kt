@@ -7,7 +7,6 @@ import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.*
 import com.flexeiprata.novalles.utils.writingtools.tryNull
 import kotlin.jvm.internal.Reflection
 import kotlin.reflect.KClass
-import kotlin.reflect.full.createType
 import kotlin.reflect.full.primaryConstructor
 
 /**
@@ -17,6 +16,7 @@ import kotlin.reflect.full.primaryConstructor
  * 2. Call [Novalles.provideUiInterfaceFor], [Novalles.provideUiInterfaceForAs] or [Novalles.provideCachedUiInterfaceForAs] in your diff util to check [UIModelHelper.areItemsTheSame] and [UIModelHelper.areContentsTheSame] and call [UIModelHelper.changePayloads].
  * 3. Create an Instructor class with [Instructor] interface and [Instruction] annotation, where [Instruction.model] is your UI Model. You should also annotate it with [BindViewHolder]
  * 4. To retrieve your [Inspector] class, pass your instructor to [Novalles.provideInspectorFromInstructor] in your onBindViewHolder() and call [Inspector.inspectPayloads] on your payloads.
+ * You can also use [provideInspectorFromUiModel] as an alternative, whenever this is possible.
  *
  * @see [UIModel]
  * @see [Instructor]
@@ -68,10 +68,6 @@ object Novalles {
     /**
      * Provides an [Inspector] from your [Instructor]. It should be annotated with [Instruction] and with option annotation [BindViewHolder].
      */
-    @Deprecated(
-        message = "Function is deprecated. You can get inspector directly from UIModel class.",
-        replaceWith = ReplaceWith("Novalles.provideInspectorFromUiModel(/*UIModel*/)")
-    )
     fun <R : Instructor> provideInspectorFromInstructor(instructor: KClass<R>): Inspector<R, Any, Any> {
         val raw = fabricate(clazz = instructor, InspectorOfPayloadsIndirect)
         return tryNull { raw.provide<Inspector<R, Any, Any>>() }
@@ -81,8 +77,8 @@ object Novalles {
     /**
      * Provides an [Inspector] from your [UIModel]. It should be linked with only one [Instructor] via [Instruction].
      */
-    fun provideInspectorFromUiModelRaw(UiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
-        val raw = fabricate(clazz = UiModel, InspectorOfPayloadsDirect)
+    fun provideInspectorFromUiModelRaw(uiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
+        val raw = fabricate(clazz = uiModel, InspectorOfPayloadsDirect)
         return tryNull { raw.provide<Inspector<Instructor, Any, Any>>() }
             ?: throw IllegalArgumentException("There is no UI Inspectors")
     }

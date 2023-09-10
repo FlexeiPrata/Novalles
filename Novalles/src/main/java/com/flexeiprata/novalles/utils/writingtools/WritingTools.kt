@@ -2,12 +2,12 @@ package com.flexeiprata.novalles.utils.writingtools
 
 import java.util.*
 
-fun StringBuilder.buildIn(builder: StringBuilderTabulator.() -> Unit) {
+internal fun StringBuilder.buildIn(builder: StringBuilderTabulator.() -> Unit) {
     builder(StringBuilderTabulator(this))
 }
 
-class StringBuilderTabulator(private val builder: StringBuilder) {
-    var level = 0
+internal class StringBuilderTabulator(private val builder: StringBuilder) {
+    private var level = 0
 
     fun appendUp(text: String) {
         level++
@@ -63,20 +63,20 @@ class StringBuilderTabulator(private val builder: StringBuilder) {
     }
 }
 
-fun StringBuilder.newLine(count: Int = 1) {
+internal fun StringBuilder.newLine(count: Int = 1) {
     repeat(count) {
         append("\n")
     }
 }
 
-fun StringBuilder.add(text: String) {
+internal fun StringBuilder.add(text: String) {
     append("$text\n")
 }
 
-fun String.capitalizeFirst(): String {
+internal fun String.capitalizeFirst(): String {
     return this.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
 }
 
-fun String.lowercaseFirst(): String {
+internal fun String.lowercaseFirst(): String {
     return this.replaceFirstChar { if (it.isUpperCase()) it.lowercase(Locale.ROOT) else it.toString() }
 }

@@ -3,7 +3,7 @@ package com.flexeiprata.novalles.utils
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSValueParameter
 
-data class DecomposedEncapsulation(
+internal data class DecomposedEncapsulation(
     val clazz: KSClassDeclaration,
     val fieldName: String,
     val params: List<KSValueParameter>,
@@ -12,25 +12,25 @@ data class DecomposedEncapsulation(
     val dot get() = if (nullable) "?." else "."
 }
 
-data class Payloading(
+internal data class Payloading(
     val name: String,
     val isNullable: Boolean
 )
 
-data class CachedField(
+internal data class CachedField(
     val name: String,
     val isNullable: Boolean,
     val variableName: String? = null,
 )
 
-data class InspectorFunData(
+internal data class InspectorFunData(
     val name: String,
     val arg: String,
     val isNullable: Boolean?,
     val isBoolean: Boolean? = null
 )
 
-data class InspectorFunDataFlat(
+internal data class InspectorFunDataFlat(
     val name: String,
     val target: String
 )

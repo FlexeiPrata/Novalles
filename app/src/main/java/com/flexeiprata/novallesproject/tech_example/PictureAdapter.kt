@@ -52,7 +52,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         private val uiModel: PictureUIModel
     ) : Instructor {
 
-        @BindOnFields(["title", "image"])
+        @BindOnFields(["title"])
         fun setTitleComplex() {
             val realDesc = "<b>${uiModel.title}</b> (${uiModel.tag})"
             viewHolder.setTitle(realDesc)
@@ -67,7 +67,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         @BindOn("image")
         fun bindTestImage(isFromBind: Boolean) {
             if (isFromBind) {
-                viewHolder.setImage(uiModel.image)
+                viewHolder.bindImage(uiModel.image)
             } else {
                 viewHolder.setImage(uiModel.image)
             }
@@ -82,12 +82,24 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
             binding.image.animateColors(image)
         }
 
+        fun bindImage(image: Int) {
+            binding.image.setBackgroundColor(image)
+        }
+
         fun setLeftInLine(color: Int) {
             binding.colour.animateColors(color)
         }
 
         fun setRightInLine(color: Int) {
             binding.colourSecond.animateColors(color)
+        }
+
+        fun bindLeftInLine(color: Int) {
+            binding.colour.setBackgroundColor(color)
+        }
+
+        fun bindRightInLine(color: Int) {
+            binding.colourSecond.setBackgroundColor(color)
         }
 
         fun setTitle(title: String) {

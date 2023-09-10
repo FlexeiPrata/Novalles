@@ -1,6 +1,5 @@
 package com.flexeiprata.novalles.processor
 
-import com.flexeiprata.novalles.annotations.AutoBindViewHolder
 import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.utils.KUIAnnotations
 import com.flexeiprata.novalles.utils.isPrimitive
@@ -11,9 +10,12 @@ import com.google.devtools.ksp.isAbstract
 import com.google.devtools.ksp.isInternal
 import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.KSPLogger
-import com.google.devtools.ksp.symbol.*
+import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSValueParameter
 
-class ErrorHandler(private val logger: KSPLogger) {
+internal class ErrorHandler(private val logger: KSPLogger) {
 
     fun checkDataClassUIModel(declaration: KSClassDeclaration) {
         val error = when {
@@ -41,7 +43,7 @@ class ErrorHandler(private val logger: KSPLogger) {
             declaration.isAbstract() || !declaration.isPublic() || declaration.isInternal() -> Error.Critical(
                 "This instructor is not valid."
             )
-            doesNotHaveValidHolder(declaration) || doesNotHaveValidHolderDeprecated(declaration) -> Error.Critical(
+            doesNotHaveValidHolder(declaration) -> Error.Critical(
                 "Provided ViewHolder should be available for UI interfaces"
             )
             else -> Error.Clear
@@ -105,13 +107,6 @@ class ErrorHandler(private val logger: KSPLogger) {
 
     private fun doesNotHaveValidHolder(declaration: KSClassDeclaration): Boolean {
         return (declaration.findAnnotation(BindViewHolder::class)?.arguments?.first()?.value as KSType?)?.declaration?.let {
-            !it.isPublic() || it.isInternal()
-        } ?: false
-    }
-
-    @Suppress("DEPRECATION")
-    private fun doesNotHaveValidHolderDeprecated(declaration: KSClassDeclaration): Boolean {
-        return (declaration.findAnnotation(AutoBindViewHolder::class)?.arguments?.first()?.value as KSType?)?.declaration?.let {
             !it.isPublic() || it.isInternal()
         } ?: false
     }

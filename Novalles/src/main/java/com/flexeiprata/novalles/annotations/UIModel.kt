@@ -32,6 +32,7 @@ annotation class NonUIProperty
  * Novalles will generate 3 different payloads in [UIModelHelper.changePayloads], compare them in [UIModelHelper.areContentsTheSame] separately.
  * In the bound with [BindViewHolder] ViewHolder, you should use ${prefix}${FieldName}In${DecomposedFieldName}${postfix}() functions in your viewHolder for each field of your decomposed value.
  *
+ * This annotation may cause errors, so be aware to handle it properly.
  */
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.SOURCE)
