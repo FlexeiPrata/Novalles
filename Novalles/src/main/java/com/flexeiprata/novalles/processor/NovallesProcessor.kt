@@ -28,6 +28,7 @@ import com.flexeiprata.novalles.utils.writingtools.retrieveArg
 import com.flexeiprata.novalles.utils.writingtools.writeAsVariable
 import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.closestClassDeclaration
+import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
@@ -37,9 +38,11 @@ import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
+import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
+import java.io.File
 
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
@@ -51,7 +54,6 @@ class NovallesProcessor(
     private val cachedFieldsMap = mutableMapOf<String, MutableList<CachedField>>()
     private val catalogUIModels = mutableMapOf<String, String>()
     private val catalogInstruction = mutableMapOf<String, String>()
-    private var catalogueCreated = false
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
 
@@ -66,15 +68,14 @@ class NovallesProcessor(
         instructors.filter { it is KSClassDeclaration && it.validate() }
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
 
-        //TODO: associate catalogue
-        createCatalogue(dependencies)
+        //TODO: multi-feature catalogue
+        val catalogue = resolver.getClassDeclarationByName("ksp.novalles.catalogues.NovallesCatalogue")
+        if (catalogue == null) createCatalogue(symbols + instructors, dependencies)
 
         return symbols.plus(instructors).filterNot { it.validate() }.toList()
     }
 
-    private fun createCatalogue(dependencies: Dependencies) {
-        if (catalogueCreated) return
-
+    private fun createCatalogue(classes: Sequence<KSAnnotated>, dependencies: Dependencies) {
         //UI model catalogue
         val fileString = buildString {
             buildIn {
@@ -139,9 +140,8 @@ class NovallesProcessor(
             "ksp.novalles.catalogues",
             "NovallesCatalogue"
         )
-
         file.write(fileString.toByteArray())
-        catalogueCreated = true
+        codeGenerator.associateWithClasses(classes.filter { it is KSClassDeclaration }.map { it as KSClassDeclaration }.toList(), "ksp.novalles.catalogues", "NovallesCatalogue")
     }
 
     private inner class ViewHoldersVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
