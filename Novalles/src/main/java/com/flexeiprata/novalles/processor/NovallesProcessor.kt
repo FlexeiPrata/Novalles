@@ -38,11 +38,9 @@ import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
-import com.google.devtools.ksp.symbol.KSName
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
-import java.io.File
 
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
@@ -68,14 +66,19 @@ class NovallesProcessor(
         instructors.filter { it is KSClassDeclaration && it.validate() }
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
 
-        //TODO: multi-feature catalogue
-        val catalogue = resolver.getClassDeclarationByName("ksp.novalles.catalogues.NovallesCatalogue")
-        if (catalogue == null) createCatalogue(symbols + instructors, dependencies)
+        val module = (symbols.firstOrNull { it is KSClassDeclaration } as KSClassDeclaration?)
+            ?.qualifiedName?.asString()?.split(".")?.get(2)
+            ?.capitalizeFirst() ?: return symbols.plus(instructors).filterNot { it.validate() }.toList()
+        val catalogue = resolver.getClassDeclarationByName("ksp.novalles.catalogues.NovallesCatalogue$module")
+        
+        if (catalogue == null) {
+            createCatalogue(symbols + instructors, dependencies, module)
+        }
 
         return symbols.plus(instructors).filterNot { it.validate() }.toList()
     }
 
-    private fun createCatalogue(classes: Sequence<KSAnnotated>, dependencies: Dependencies) {
+    private fun createCatalogue(classes: Sequence<KSAnnotated>, dependencies: Dependencies, module: String) {
         //UI model catalogue
         val fileString = buildString {
             buildIn {
@@ -89,7 +92,7 @@ class NovallesProcessor(
                 appendIn("import com.flexeiprata.novalles.interfaces.Instructor")
                 newLine()
                 appendIn("@Keep")
-                appendIn("class NovallesCatalogue(): Catalogue { ")
+                appendIn("class NovallesCatalogue$module: Catalogue { ")
                 newLine()
                 incrementLevel()
                 appendIn(
@@ -138,10 +141,14 @@ class NovallesProcessor(
         val file = codeGenerator.createNewFile(
             dependencies,
             "ksp.novalles.catalogues",
-            "NovallesCatalogue"
+            "NovallesCatalogue$module"
         )
         file.write(fileString.toByteArray())
-        codeGenerator.associateWithClasses(classes.filter { it is KSClassDeclaration }.map { it as KSClassDeclaration }.toList(), "ksp.novalles.catalogues", "NovallesCatalogue")
+        codeGenerator.associateWithClasses(
+            classes.filter { it is KSClassDeclaration }.map { it as KSClassDeclaration }.toList(),
+            "ksp.novalles.catalogues",
+            "NovallesCatalogue"
+        )
     }
 
     private inner class ViewHoldersVisitor(val dependencies: Dependencies) : KSVisitorVoid() {

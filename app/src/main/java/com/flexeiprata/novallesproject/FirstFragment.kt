@@ -2,6 +2,7 @@ package com.flexeiprata.novallesproject
 
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -11,7 +12,6 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import com.flexeiprata.novallesproject.databinding.FragmentFirstBinding
 import com.flexeiprata.novallesproject.tech_example.BaseUiModel
-import com.flexeiprata.novallesproject.tech_example.ColorPair
 import com.flexeiprata.novallesproject.tech_example.PictureAdapter
 import com.flexeiprata.novallesproject.tech_example.PictureUIModel
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.util.*
+import kotlin.time.ExperimentalTime
+import kotlin.time.measureTimedValue
 
 class FirstFragment : Fragment() {
 
@@ -42,8 +44,13 @@ class FirstFragment : Fragment() {
 
     private val dataChannel = MutableStateFlow<List<BaseUiModel>>(data)
 
+    @OptIn(ExperimentalTime::class)
     private val novallesAdapter by lazy {
-        PictureAdapter(this::processClick)
+        val (value, duration) = measureTimedValue {
+            PictureAdapter(this::processClick)
+        }
+        Log.d("Time", duration.toString())
+        value
     }
 
     override fun onCreateView(

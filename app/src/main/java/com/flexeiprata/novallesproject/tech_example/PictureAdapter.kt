@@ -24,6 +24,8 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         DefaultDiffUtil(PictureUIModel::class)
     ) {
 
+    private val inspector = provideInspectorFromModelCatalogue(PictureUIModel::class)
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PictureViewHolder {
         return PictureViewHolder(
             ItemPictureBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -41,7 +43,6 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
     ) {
         val model = currentList[position] as PictureUIModel
         val instructor = PictureInstructor(viewHolder = holder, model)
-        val inspector = provideInspectorFromModelCatalogue(PictureUIModel::class)
         inspector.inspectPayloads(payloads, instructor, viewHolder = holder) {
             inspector.bind(model, holder, instructor)
             holder.setOnClickActions(model, onClick)
