@@ -5,6 +5,15 @@
 [![License](https://img.shields.io/badge/License%20-Apache%202-337ab7.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![](https://jitpack.io/v/FlexeiPrata/Novalles.svg)](https://jitpack.io/#FlexeiPrata/Novalles)
 
+**Because of recent [issues](https://github.com/google/ksp/issues/1562) of KSP library, some annotations do not work as expected.**
+
+Affected annotations:
+1. **Primary tag** - does not work. Your tag will be always set as a first property of your UI model.
+2. **NonUiProperty** - does not work. You'll get corresponding warnings in the logger, even if the annotation is set.
+3. **Decompose** - does not work. You should replace it with separate fields.
+
+****
+
 ## How to use
 
 1. Annotate your UI model with **UIModel** Annotation.
@@ -14,7 +23,7 @@
 data class PictureUIModel(
     @PrimaryTag val tag: String,
     val image: Int,
-    @Decompose val line: ColorPair,
+    val line: ColorPair,
     @NonUIProperty val imageCode: String,
     val title: String,
     val desc: String,
@@ -24,14 +33,12 @@ data class PictureUIModel(
 
 * You can use **PrimaryTag** annotation to define property to be used in are items the same comparison.
 * Use **NonUIProperty** annotation to define property that will not be used in any comparisons.
-* Use **Decompose** annotation to tell Novalles compare each property of decomposed value separately. See _Decompose_
-  section for more details.
 
-2. Pass an instance of **_UIModelHelper_** in your DiffUtil using **provideUiInterfaceFor** or
+2. Pass an instance of **_UIModelHelper_** in your DiffUtil using **provideUiInterfaceForAsFromCatalogue**, **provideUiInterfaceFor** or
    **provideUiInterfaceForAs** functions.
 
 ````kotlin
-private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAs(PictureUIModel::class)
+private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(PictureUIModel::class)
 ````
 
 3. Call relevant functions of _UIModelHelper_ in your DiffUtil. This example uses diffUtil based on common interface.
@@ -39,7 +46,7 @@ private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterf
 ````kotlin
 class DefaultDiffUtil<T : BaseUiModel>(uiModel: KClass<T>) : DiffUtil.ItemCallback<BaseUiModel>() {
 
-    private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAs(uiModel)
+    private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(uiModel)
 
     override fun areItemsTheSame(oldItem: BaseUiModel, newItem: BaseUiModel): Boolean {
         return oldItem.areItemsTheSame(newItem, uiModelHelper)
@@ -112,11 +119,15 @@ If you completely rely on **BindViewHolder**, you can create the simplest Instru
 inner class AutoInstructor : Instructor
 ````
 
-5. Create an instance of the **Inspector** class using _Novalles.**provideInspectorFromUiModel<uiModelClass>**()_ 
-function. Better to create it outside any function, so create it directly in the adapter itself.
+5. Create an instance of the **Inspector** class using provide functions. Note that provide function other than catalogue one use reflection,
+So you should be careful when use it.
 
 ````kotlin
 private val inspector = Novalles.provideInspectorFromUiModel<PictureUIModel>()
+private val inspector = Novalles.provideInspectorFromUiModelRaw(PictureUIModel::class)
+private val inspector = Novalles.provideInspectorFromInstructor(PictureInstructor::class)
+private val inspector = Novalles.provideInspectorFromModelCatalogue(PictureUIModel::class)
+private val inspector = Novalles.provideInspectorFromInstructorCatalogue(PictureInstructor::class)
 ````
 
 6. Invoke _Inspector.**inspectPayloads**_ with 4 arguments: your payload,
@@ -188,7 +199,10 @@ data class PictureUIModel(
 }
 ````
 
-### Decompose annotations
+### Decompose annotations (Deprecated)
+#### Decompose annotation is deprecated and will be removed later. Consider replacement of decomposed value with separate fields in your UI model.
+
+_**Note:** see the issue section on the top of the README_
 
 Value, annotated with **Decompose** will be decomposed with its own values. For example, if your field have 2
 properties, they will be used in any Novalles' actions separately:

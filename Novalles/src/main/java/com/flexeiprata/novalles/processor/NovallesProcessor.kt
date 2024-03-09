@@ -1,12 +1,39 @@
 package com.flexeiprata.novalles.processor
 
-import com.flexeiprata.novalles.annotations.*
+import com.flexeiprata.novalles.annotations.BindOn
+import com.flexeiprata.novalles.annotations.BindOnFields
+import com.flexeiprata.novalles.annotations.BindOnTag
+import com.flexeiprata.novalles.annotations.BindViewHolder
+import com.flexeiprata.novalles.annotations.Instruction
+import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Inspector
-import com.flexeiprata.novalles.utils.*
-import com.flexeiprata.novalles.utils.writingtools.*
+import com.flexeiprata.novalles.interfaces.UIModelHelper
+import com.flexeiprata.novalles.utils.CachedField
+import com.flexeiprata.novalles.utils.DecomposedEncapsulation
+import com.flexeiprata.novalles.utils.InspectorFunData
+import com.flexeiprata.novalles.utils.InspectorFunDataFlat
+import com.flexeiprata.novalles.utils.KUIAnnotations
+import com.flexeiprata.novalles.utils.Payloading
+import com.flexeiprata.novalles.utils.isPrimitive
+import com.flexeiprata.novalles.utils.writingtools.add
+import com.flexeiprata.novalles.utils.writingtools.buildIn
+import com.flexeiprata.novalles.utils.writingtools.capitalizeFirst
+import com.flexeiprata.novalles.utils.writingtools.dataClassConstructor
+import com.flexeiprata.novalles.utils.writingtools.findAnnotation
+import com.flexeiprata.novalles.utils.writingtools.funHeaderBuilder
+import com.flexeiprata.novalles.utils.writingtools.hasAnnotation
+import com.flexeiprata.novalles.utils.writingtools.isFirstArgNullable
+import com.flexeiprata.novalles.utils.writingtools.newLine
+import com.flexeiprata.novalles.utils.writingtools.retrieveArg
+import com.flexeiprata.novalles.utils.writingtools.writeAsVariable
+import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.closestClassDeclaration
 import com.google.devtools.ksp.isPublic
-import com.google.devtools.ksp.processing.*
+import com.google.devtools.ksp.processing.CodeGenerator
+import com.google.devtools.ksp.processing.Dependencies
+import com.google.devtools.ksp.processing.KSPLogger
+import com.google.devtools.ksp.processing.Resolver
+import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
@@ -22,6 +49,9 @@ class NovallesProcessor(
 
     private val payloadsMap = mutableMapOf<String, MutableList<Payloading>>()
     private val cachedFieldsMap = mutableMapOf<String, MutableList<CachedField>>()
+    private val catalogUIModels = mutableMapOf<String, String>()
+    private val catalogInstruction = mutableMapOf<String, String>()
+    private var catalogueCreated = false
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
 
@@ -36,13 +66,87 @@ class NovallesProcessor(
         instructors.filter { it is KSClassDeclaration && it.validate() }
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
 
+        //TODO: associate catalogue
+        createCatalogue(dependencies)
+
         return symbols.plus(instructors).filterNot { it.validate() }.toList()
+    }
+
+    private fun createCatalogue(dependencies: Dependencies) {
+        if (catalogueCreated) return
+
+        //UI model catalogue
+        val fileString = buildString {
+            buildIn {
+                appendIn("package ksp.novalles.catalogues")
+                newLine()
+                appendIn("import ${UIModelHelper::class.qualifiedName}")
+                appendIn("import kotlin.reflect.KClass")
+                appendIn("import com.flexeiprata.novalles.interfaces.Catalogue")
+                appendIn("import androidx.annotation.Keep")
+                appendIn("import com.flexeiprata.novalles.interfaces.Inspector")
+                appendIn("import com.flexeiprata.novalles.interfaces.Instructor")
+                newLine()
+                appendIn("@Keep")
+                appendIn("class NovallesCatalogue(): Catalogue { ")
+                newLine()
+                incrementLevel()
+                appendIn(
+                    funHeaderBuilder(
+                        name = "provideUiModel",
+                        genericString = "<T>",
+                        args = listOf("classQualifiedName: String"),
+                        returnType = "UIModelHelper<T>",
+                        isOverridden = true
+                    )
+                )
+                incrementLevel()
+                appendIn("val helper = when (classQualifiedName) {")
+                incrementLevel()
+                catalogUIModels.keys.forEach { clazz ->
+                    appendIn("\"$clazz\" -> ${catalogUIModels[clazz]}")
+                }
+                appendIn("else -> throw Exception(\"There is no UI interfaces. If it happened on the release build, check if you keep your UIModels' names.\")")
+                appendDown("}")
+                appendIn("return helper as UIModelHelper<T>")
+                appendDown("}")
+                newLine()
+                appendIn(
+                    funHeaderBuilder(
+                        name = "provideInspector",
+                        genericString = "<T: Instructor>",
+                        args = listOf("classQualifiedName: String"),
+                        returnType = "Inspector<T, Any, Any>",
+                        isOverridden = true
+                    )
+                )
+                incrementLevel()
+                appendIn("val helper = when (classQualifiedName) {")
+                incrementLevel()
+                catalogUIModels.keys.forEach { clazz ->
+                    appendIn("\"$clazz\" -> ${catalogInstruction[clazz]?.replace("PayloadOfUIModel", "Inspector")}()")
+                }
+                appendIn("else -> throw Exception(\"There is no UI Inspectors. If it happened on the release build, check if you keep your UIModels' names.\")")
+                appendDown("}")
+                appendIn("return helper as Inspector<T, Any, Any>")
+                appendDown("}")
+                closeFunctions()
+            }
+        }
+
+        val file = codeGenerator.createNewFile(
+            dependencies,
+            "ksp.novalles.catalogues",
+            "NovallesCatalogue"
+        )
+
+        file.write(fileString.toByteArray())
+        catalogueCreated = true
     }
 
     private inner class ViewHoldersVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
 
         val errorHandler = ErrorHandler(logger)
-
 
 
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
@@ -59,15 +163,15 @@ class NovallesProcessor(
             val declarationFunctions = classDeclaration.getAllFunctions()
 
             val inspectorFunctions = declarationFunctions.filter {
-                    it.hasAnnotation(BindOn::class)
-                }.map {
-                    InspectorFunData(
-                        name = it.simpleName.getShortName(),
-                        arg = it.annotations.first().arguments.first().value as String,
-                        isNullable = it.parameters.firstOrNull()?.type?.resolve()?.isMarkedNullable,
-                        isBoolean = it.parameters.firstOrNull()?.type?.toString() == "Boolean"
-                    )
-                }.toList()
+                it.hasAnnotation(BindOn::class)
+            }.map {
+                InspectorFunData(
+                    name = it.simpleName.getShortName(),
+                    arg = it.annotations.first().arguments.first().value as String,
+                    isNullable = it.parameters.firstOrNull()?.type?.resolve()?.isMarkedNullable,
+                    isBoolean = it.parameters.firstOrNull()?.type?.toString() == "Boolean"
+                )
+            }.toList()
 
             val inspectorMultipleValues = declarationFunctions.filter { function ->
                 function.hasAnnotation(BindOnFields::class)
@@ -104,6 +208,10 @@ class NovallesProcessor(
                 "com.flexeiprata.novalles.interfaces.Novalles"
             )
 
+            val catalogueName = model.qualifiedName?.asString() ?: ""
+            val catalogueValue = PACKAGE + ".${model.simpleName.getShortName()}PayloadOfUIModel"
+
+            catalogInstruction[catalogueName] = catalogueValue
             val text = buildString {
                 add("package $PACKAGE")
                 listOfImports.forEach {
@@ -151,7 +259,7 @@ class NovallesProcessor(
                                 inspectorFunc != null && inspectorFunc.isNullable == null -> "instructor.${inspectorFunc.name}()"
 
                                 //BindOn with an bind argument
-                                inspectorFunc != null && inspectorFunc.isBoolean == true  -> {
+                                inspectorFunc != null && inspectorFunc.isBoolean == true -> {
                                     "instructor.${inspectorFunc.name}(false)"
                                 }
 
@@ -164,6 +272,7 @@ class NovallesProcessor(
                                 } -> {
                                     "viewHolder?.$prefix${payName}(payload.new${payName})"
                                 }
+
                                 else -> "Unit".also {
                                     logger.warn(
                                         "There was no function found for UI field $payName. Put NonUIProperty or check all requirements: function name, arg nullability and etc.",
@@ -238,6 +347,7 @@ class NovallesProcessor(
                             } -> {
                                 "viewHolder.$prefix${payName}(model.${modelFieldName})"
                             }
+
                             else -> null
                         }
 
@@ -262,12 +372,15 @@ class NovallesProcessor(
         private fun extractViewHolderAnnotations(classDeclaration: KSClassDeclaration): Triple<KSClassDeclaration, String, String> {
             return when {
                 classDeclaration.hasAnnotation(BindViewHolder::class) -> {
-                    val annotation = classDeclaration.findAnnotation(BindViewHolder::class) ?: errorHandler.throwUnexpectedError(classDeclaration)
-                    val viewHolder = (annotation.arguments.retrieveArg<KSType>("viewHolder")).declaration.closestClassDeclaration() ?: errorHandler.throwUnexpectedError(classDeclaration)
+                    val annotation =
+                        classDeclaration.findAnnotation(BindViewHolder::class) ?: errorHandler.throwUnexpectedError(classDeclaration)
+                    val viewHolder = (annotation.arguments.retrieveArg<KSType>("viewHolder")).declaration.closestClassDeclaration()
+                        ?: errorHandler.throwUnexpectedError(classDeclaration)
                     val prefix = annotation.arguments.retrieveArg<String>("prefix")
                     val postfix = annotation.arguments.retrieveArg<String>("bindPrefix")
                     Triple(viewHolder, prefix, postfix)
                 }
+
                 else -> {
                     errorHandler.logError(classDeclaration, "This class should be annotated with BindViewHolder annotation.")
                 }
@@ -278,6 +391,8 @@ class NovallesProcessor(
 
     private inner class UIModelVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
 
+
+        @OptIn(KspExperimental::class)
         override fun visitClassDeclaration(
             classDeclaration: KSClassDeclaration, data: Unit
         ) {
@@ -291,6 +406,9 @@ class NovallesProcessor(
                 parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.PrimaryTag.name } != null
             } ?: classDeclaration.primaryConstructor?.parameters?.first() ?: return
 
+            //TODO: check on the exact version
+            //TODO: check if fields are registered
+            //TODO: check annotation
             val notUI = constructor.parameters.filter { parameter ->
                 parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.NonUIProperty.name } != null
             }
@@ -298,13 +416,11 @@ class NovallesProcessor(
             val decomposedFields = constructor.parameters.filter { parameter ->
                 parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.Decompose.name } != null
             }
+            //logger.warn("${constructor.parameters.map { "$it to ${it.annotations.toList()}" }}")
 
             decomposedFields.forEach {
                 errorHandler.checkDecomposedValue(classDeclaration, it)
             }
-
-
-
 
             val decomposedFieldsValues =
                 decomposedFields.mapNotNull {
@@ -413,6 +529,11 @@ class NovallesProcessor(
                         }
                     }
                 }
+
+                val catalogueIndexName = classDeclaration.qualifiedName!!.asString()
+                val catalogueValueName = PACKAGE + ".${name}UIHelper()"
+
+                catalogUIModels[catalogueIndexName] = catalogueValueName
 
                 importsMap.values.forEach {
                     add("import $it")

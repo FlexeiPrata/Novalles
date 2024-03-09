@@ -10,7 +10,6 @@ import com.flexeiprata.novalles.interfaces.UIModelHelper
 data class PictureUIModel(
     @PrimaryTag val tag: String,
     val image: Int,
-    @Decompose val line: ColorPair,
     @NonUIProperty val imageCode: String,
     val title: String,
     val desc: String,

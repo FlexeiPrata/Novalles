@@ -4,7 +4,7 @@ import com.flexeiprata.novalles.interfaces.*
 
 /**
  * Class, annotated with it is considered to be a UIModel and can be used with [Novalles] in your recycler adapter.
- * Use [PrimaryTag], [NonUIProperty] and [Decompose] annotations to configure behavior of payload generating.
+ * Use [PrimaryTag] and [NonUIProperty] annotations to configure behavior of payload generating.
  * Note: if there is no [PrimaryTag] annotation, for [UIModelHelper.areItemsTheSame] first value of this class will be used.
  */
 @Target(AnnotationTarget.CLASS)
@@ -34,6 +34,7 @@ annotation class NonUIProperty
  *
  * This annotation may cause errors, so be aware to handle it properly.
  */
+@Deprecated("This annotation is now obsolete and soon will be removed from the Novalles library. Consider using embedded values as separated field in your UI model.")
 @Target(AnnotationTarget.PROPERTY)
 @Retention(AnnotationRetention.SOURCE)
 annotation class Decompose

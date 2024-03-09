@@ -10,10 +10,13 @@ import androidx.annotation.ColorInt
 import androidx.core.text.HtmlCompat
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView.ViewHolder
-import com.flexeiprata.novalles.annotations.*
+import com.flexeiprata.novalles.annotations.BindOn
+import com.flexeiprata.novalles.annotations.BindOnFields
+import com.flexeiprata.novalles.annotations.BindOnTag
+import com.flexeiprata.novalles.annotations.BindViewHolder
+import com.flexeiprata.novalles.annotations.Instruction
 import com.flexeiprata.novalles.interfaces.Instructor
-import com.flexeiprata.novalles.interfaces.Novalles
-import com.flexeiprata.novalles.interfaces.Novalles.provideInspectorFromUiModel
+import com.flexeiprata.novalles.interfaces.Novalles.provideInspectorFromModelCatalogue
 import com.flexeiprata.novallesproject.databinding.ItemPictureBinding
 
 class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
@@ -38,7 +41,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
     ) {
         val model = currentList[position] as PictureUIModel
         val instructor = PictureInstructor(viewHolder = holder, model)
-        val inspector = provideInspectorFromUiModel<PictureUIModel>()
+        val inspector = provideInspectorFromModelCatalogue(PictureUIModel::class)
         inspector.inspectPayloads(payloads, instructor, viewHolder = holder) {
             inspector.bind(model, holder, instructor)
             holder.setOnClickActions(model, onClick)
@@ -86,13 +89,13 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
             binding.image.setBackgroundColor(image)
         }
 
-        fun setLeftInLine(color: Int) {
+        /*fun setLeftInLine(color: Int) {
             binding.colour.animateColors(color)
         }
 
         fun setRightInLine(color: Int) {
             binding.colourSecond.animateColors(color)
-        }
+        }*/
 
         fun bindLeftInLine(color: Int) {
             binding.colour.setBackgroundColor(color)

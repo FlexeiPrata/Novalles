@@ -7,7 +7,7 @@ import kotlin.reflect.KClass
 
 class DefaultDiffUtil <T: BaseUiModel> (uiModel: KClass<T>) : DiffUtil.ItemCallback<BaseUiModel>() {
 
-    private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAs(uiModel)
+    private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(uiModel)
 
     override fun areItemsTheSame(oldItem: BaseUiModel, newItem: BaseUiModel): Boolean {
         return oldItem.areItemsTheSame(newItem, uiModelHelper)

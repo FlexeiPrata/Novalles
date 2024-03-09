@@ -6,12 +6,12 @@ plugins {
 
 android {
     namespace 'com.flexeiprata.novallesproject'
-    compileSdk 32
+    compileSdk 33
 
     defaultConfig {
         applicationId "com.flexeiprata.novallesproject"
         minSdk 21
-        targetSdk 32
+        targetSdk 33
         versionCode 1
         versionName "1.0"
 

@@ -32,10 +32,6 @@ class FirstFragment : Fragment() {
             PictureUIModel(
                 tag = it.toString(),
                 image = generateRandomColor(randomizer),
-                line = ColorPair(
-                    left = generateRandomColor(randomizer),
-                    right = generateRandomColor(randomizer)
-                ),
                 title = getRandomString(10),
                 desc = getRandomString(40),
                 imageCode = "$it".repeat(10),
@@ -88,19 +84,6 @@ class FirstFragment : Fragment() {
                 val model = it as PictureUIModel
                 model.copy(
                     image = generateRandomColor(randomizer)
-                )
-            }
-            dataChannel.tryEmit(newList)
-        }
-
-        binding.swap.setOnClickListener {
-            val newList = novallesAdapter.currentList.map {
-                val model = it as PictureUIModel
-                model.copy(
-                    line = ColorPair(
-                        it.line.right,
-                        it.line.left
-                    )
                 )
             }
             dataChannel.tryEmit(newList)
