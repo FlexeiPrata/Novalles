@@ -3,11 +3,10 @@ package com.flexeiprata.novalles.interfaces
 import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.annotations.Instruction
 import com.flexeiprata.novalles.annotations.UIModel
+import com.flexeiprata.novalles.annotations.NovallesCatalogue
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.InspectorOfPayloadsDirect
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.InspectorOfPayloadsIndirect
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.UIModelInterface
-import com.flexeiprata.novalles.interfaces.Novalles.module
-import com.flexeiprata.novalles.utils.writingtools.capitalizeFirst
 import com.flexeiprata.novalles.utils.writingtools.tryNull
 import kotlin.jvm.internal.Reflection
 import kotlin.reflect.KClass
@@ -55,17 +54,29 @@ object Novalles {
         return raw.provide() as? UIModelHelper<R>? ?: throw IllegalArgumentException("There is no UI interfaces. If it happened on the release build, check if you keep your UIModels' names.")
     }
 
-    fun <T : Any, R : Any> provideUiInterfaceForAsFromCatalogue(clazz: KClass<T>): UIModelHelper<R> {
-        return getCatalogue(clazz.module).provideUiModel(clazz.qualifiedName!!)
+    /**
+     * Provides an [UIModelHelper] from your [UIModel] and casts its generic to an [R] class.
+     * You should have one [NovallesCatalogue] class per module and provide it in the [catalogue] field.
+     */
+    fun <T : Any, R : Any> provideUiInterfaceForAsFromCatalogue(catalogue: KClass<*>, clazz: KClass<T>): UIModelHelper<R> {
+        return getCatalogue(catalogue.name)?.provideUiModel(clazz.qualifiedName!!) ?: provideUiInterfaceForAs(clazz)
     }
 
-    fun provideInspectorFromModelCatalogue(uiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
-        return getCatalogue(uiModel.module).provideInspector(uiModel.qualifiedName!!)
+    /**
+     * Provides an [Inspector] from your [UIModel]. It should be linked with only one [Instructor] via [Instruction].
+     * You should have one [NovallesCatalogue] class per module and provide it in the [catalogue] field.
+     */
+    fun provideInspectorFromModelCatalogue(catalogue: KClass<*>, uiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
+        return getCatalogue(catalogue.name)?.provideInspector(uiModel.qualifiedName!!) ?: provideInspectorFromUiModelRaw(uiModel)
     }
 
-    fun provideInspectorFromInstructorCatalogue(instructor: KClass<Instructor>): Inspector<Instructor, Any, Any> {
+    /**
+     * Provides an [Inspector] from your [Instructor]. It should be annotated with [Instruction] and with option annotation [BindViewHolder].
+     * You should have one [NovallesCatalogue] class per module and provide it in the [catalogue] field.
+     */
+    fun provideInspectorFromInstructorCatalogue(catalogue: KClass<*>, instructor: KClass<Instructor>): Inspector<Instructor, Any, Any> {
         val model = instructor.findAnnotation<Instruction>()?.model ?: throw Exception("Invalid instruction class")
-        return getCatalogue(instructor.module).provideInspector(model.qualifiedName!!)
+        return getCatalogue(catalogue.name)?.provideInspector(model.qualifiedName!!) ?: provideInspectorFromInstructor(instructor)
     }
 
     /**
@@ -157,20 +168,22 @@ object Novalles {
         return ProviderFactory(from)
     }
 
-    private fun getCatalogue(module: String): Catalogue {
-        return catalogues[module] ?: run {
-            val newCatalogue = createCatalogue(module)
-            catalogues[module] = newCatalogue
+    private fun getCatalogue(cataloguesName: String): Catalogue? {
+        return catalogues[cataloguesName] ?: run {
+            val newCatalogue = createCatalogue(cataloguesName)
+            if (newCatalogue != null) catalogues[cataloguesName] = newCatalogue
             newCatalogue
         }
     }
 
-    private fun createCatalogue(module: String): Catalogue {
-        val from = Reflection.createKotlinClass(Class.forName("ksp.novalles.catalogues.NovallesCatalogue${module.capitalizeFirst()}"))
-        return ProviderFactory(from).provide<Catalogue>() ?: throw IllegalArgumentException("Catalogue is not created, report a bug")
+    private fun createCatalogue(cataloguesName: String): Catalogue? {
+        return tryNull {
+            val from = Reflection.createKotlinClass(Class.forName("ksp.novalles.catalogues.NovallesCatalogue$cataloguesName"))
+            ProviderFactory(from).provide<Catalogue>()
+        }
     }
 
-    private val <T : Any> KClass<T>.module: String get() = this.qualifiedName?.split(".")?.get(2) ?: throw IllegalArgumentException("Cannot get module")
+    private val KClass<*>.name get() = simpleName ?: ""
 
     private enum class ProviderOptions {
         UIModelInterface, InspectorOfPayloadsIndirect, InspectorOfPayloadsDirect

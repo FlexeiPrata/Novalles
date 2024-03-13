@@ -5,6 +5,7 @@ import com.flexeiprata.novalles.annotations.BindOnFields
 import com.flexeiprata.novalles.annotations.BindOnTag
 import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.annotations.Instruction
+import com.flexeiprata.novalles.annotations.NovallesCatalogue
 import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Inspector
 import com.flexeiprata.novalles.interfaces.UIModelHelper
@@ -28,7 +29,6 @@ import com.flexeiprata.novalles.utils.writingtools.retrieveArg
 import com.flexeiprata.novalles.utils.writingtools.writeAsVariable
 import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.closestClassDeclaration
-import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
@@ -66,19 +66,16 @@ class NovallesProcessor(
         instructors.filter { it is KSClassDeclaration && it.validate() }
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
 
-        val module = (symbols.firstOrNull { it is KSClassDeclaration } as KSClassDeclaration?)
-            ?.qualifiedName?.asString()?.split(".")?.get(2)
-            ?.capitalizeFirst() ?: return symbols.plus(instructors).filterNot { it.validate() }.toList()
-        val catalogue = resolver.getClassDeclarationByName("ksp.novalles.catalogues.NovallesCatalogue$module")
-        
-        if (catalogue == null) {
-            createCatalogue(symbols + instructors, dependencies, module)
+        val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!).firstOrNull() as? KSClassDeclaration?
+
+        if (catalogue != null) {
+            createCatalogue(symbols + instructors, dependencies, catalogue)
         }
 
         return symbols.plus(instructors).filterNot { it.validate() }.toList()
     }
 
-    private fun createCatalogue(classes: Sequence<KSAnnotated>, dependencies: Dependencies, module: String) {
+    private fun createCatalogue(classes: Sequence<KSAnnotated>, dependencies: Dependencies, module: KSClassDeclaration) {
         //UI model catalogue
         val fileString = buildString {
             buildIn {
@@ -92,7 +89,7 @@ class NovallesProcessor(
                 appendIn("import com.flexeiprata.novalles.interfaces.Instructor")
                 newLine()
                 appendIn("@Keep")
-                appendIn("class NovallesCatalogue$module: Catalogue { ")
+                appendIn("class NovallesCatalogue${module.simpleName.asString()}: Catalogue { ")
                 newLine()
                 incrementLevel()
                 appendIn(
@@ -100,7 +97,7 @@ class NovallesProcessor(
                         name = "provideUiModel",
                         genericString = "<T>",
                         args = listOf("classQualifiedName: String"),
-                        returnType = "UIModelHelper<T>",
+                        returnType = "UIModelHelper<T>?",
                         isOverridden = true
                     )
                 )
@@ -110,7 +107,7 @@ class NovallesProcessor(
                 catalogUIModels.keys.forEach { clazz ->
                     appendIn("\"$clazz\" -> ${catalogUIModels[clazz]}")
                 }
-                appendIn("else -> throw Exception(\"There is no UI interfaces. If it happened on the release build, check if you keep your UIModels' names.\")")
+                appendIn("else -> return null")
                 appendDown("}")
                 appendIn("return helper as UIModelHelper<T>")
                 appendDown("}")
@@ -120,7 +117,7 @@ class NovallesProcessor(
                         name = "provideInspector",
                         genericString = "<T: Instructor>",
                         args = listOf("classQualifiedName: String"),
-                        returnType = "Inspector<T, Any, Any>",
+                        returnType = "Inspector<T, Any, Any>?",
                         isOverridden = true
                     )
                 )
@@ -130,7 +127,7 @@ class NovallesProcessor(
                 catalogUIModels.keys.forEach { clazz ->
                     appendIn("\"$clazz\" -> ${catalogInstruction[clazz]?.replace("PayloadOfUIModel", "Inspector")}()")
                 }
-                appendIn("else -> throw Exception(\"There is no UI Inspectors. If it happened on the release build, check if you keep your UIModels' names.\")")
+                appendIn("else -> return null")
                 appendDown("}")
                 appendIn("return helper as Inspector<T, Any, Any>")
                 appendDown("}")

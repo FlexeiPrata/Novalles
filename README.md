@@ -38,7 +38,14 @@ data class PictureUIModel(
    **provideUiInterfaceForAs** functions.
 
 ````kotlin
-private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(PictureUIModel::class)
+private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(MainCatalogue::class, PictureUIModel::class)
+````
+
+**Note**: You should have a single class/object annotated with NovallesCatalogue annotation to enable catalogue feature.
+
+````kotlin
+@NovallesCatalogue
+object MainCatalogue
 ````
 
 3. Call relevant functions of _UIModelHelper_ in your DiffUtil. This example uses diffUtil based on common interface.
@@ -46,7 +53,7 @@ private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterf
 ````kotlin
 class DefaultDiffUtil<T : BaseUiModel>(uiModel: KClass<T>) : DiffUtil.ItemCallback<BaseUiModel>() {
 
-    private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(uiModel)
+    private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(MainCatalogue::class, uiModel)
 
     override fun areItemsTheSame(oldItem: BaseUiModel, newItem: BaseUiModel): Boolean {
         return oldItem.areItemsTheSame(newItem, uiModelHelper)
@@ -126,8 +133,8 @@ So you should be careful when use it.
 private val inspector = Novalles.provideInspectorFromUiModel<PictureUIModel>()
 private val inspector = Novalles.provideInspectorFromUiModelRaw(PictureUIModel::class)
 private val inspector = Novalles.provideInspectorFromInstructor(PictureInstructor::class)
-private val inspector = Novalles.provideInspectorFromModelCatalogue(PictureUIModel::class)
-private val inspector = Novalles.provideInspectorFromInstructorCatalogue(PictureInstructor::class)
+private val inspector = Novalles.provideInspectorFromModelCatalogue(MainCatalogue::class, PictureUIModel::class)
+private val inspector = Novalles.provideInspectorFromInstructorCatalogue(MainCatalogue::class, PictureInstructor::class)
 ````
 
 6. Invoke _Inspector.**inspectPayloads**_ with 4 arguments: your payload,
