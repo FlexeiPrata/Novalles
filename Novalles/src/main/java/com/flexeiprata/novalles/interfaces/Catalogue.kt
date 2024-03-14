@@ -1,9 +1,11 @@
 package com.flexeiprata.novalles.interfaces
 
+import kotlin.reflect.KClass
+
 interface Catalogue {
 
-    fun <T> provideUiModel(classQualifiedName: String): UIModelHelper<T>?
+    fun <T> provideUiModel(clazz: KClass<*>): UIModelHelper<T>?
 
-    fun <T : Instructor> provideInspector(classQualifiedName: String): Inspector<T, Any, Any>?
+    fun <T : Instructor> provideInspector(clazz: KClass<*>): Inspector<T, Any, Any>?
 
 }

@@ -96,16 +96,16 @@ class NovallesProcessor(
                     funHeaderBuilder(
                         name = "provideUiModel",
                         genericString = "<T>",
-                        args = listOf("classQualifiedName: String"),
+                        args = listOf("clazz: KClass<*>"),
                         returnType = "UIModelHelper<T>?",
                         isOverridden = true
                     )
                 )
                 incrementLevel()
-                appendIn("val helper = when (classQualifiedName) {")
+                appendIn("val helper = when (clazz) {")
                 incrementLevel()
                 catalogUIModels.keys.forEach { clazz ->
-                    appendIn("\"$clazz\" -> ${catalogUIModels[clazz]}")
+                    appendIn("$clazz::class -> ${catalogUIModels[clazz]}")
                 }
                 appendIn("else -> return null")
                 appendDown("}")
@@ -116,16 +116,16 @@ class NovallesProcessor(
                     funHeaderBuilder(
                         name = "provideInspector",
                         genericString = "<T: Instructor>",
-                        args = listOf("classQualifiedName: String"),
+                        args = listOf("clazz: KClass<*>"),
                         returnType = "Inspector<T, Any, Any>?",
                         isOverridden = true
                     )
                 )
                 incrementLevel()
-                appendIn("val helper = when (classQualifiedName) {")
+                appendIn("val helper = when (clazz) {")
                 incrementLevel()
                 catalogUIModels.keys.forEach { clazz ->
-                    appendIn("\"$clazz\" -> ${catalogInstruction[clazz]?.replace("PayloadOfUIModel", "Inspector")}()")
+                    appendIn("$clazz::class -> ${catalogInstruction[clazz]?.replace("PayloadOfUIModel", "Inspector")}()")
                 }
                 appendIn("else -> return null")
                 appendDown("}")

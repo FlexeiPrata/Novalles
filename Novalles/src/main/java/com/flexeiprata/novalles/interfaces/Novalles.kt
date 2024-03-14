@@ -2,8 +2,8 @@ package com.flexeiprata.novalles.interfaces
 
 import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.annotations.Instruction
-import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.annotations.NovallesCatalogue
+import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.InspectorOfPayloadsDirect
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.InspectorOfPayloadsIndirect
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.UIModelInterface
@@ -59,7 +59,7 @@ object Novalles {
      * You should have one [NovallesCatalogue] class per module and provide it in the [catalogue] field.
      */
     fun <T : Any, R : Any> provideUiInterfaceForAsFromCatalogue(catalogue: KClass<*>, clazz: KClass<T>): UIModelHelper<R> {
-        return getCatalogue(catalogue.name)?.provideUiModel(clazz.qualifiedName!!) ?: provideUiInterfaceForAs(clazz)
+        return getCatalogue(catalogue.name)?.provideUiModel(clazz) ?: provideUiInterfaceForAs(clazz)
     }
 
     /**
@@ -67,7 +67,7 @@ object Novalles {
      * You should have one [NovallesCatalogue] class per module and provide it in the [catalogue] field.
      */
     fun provideInspectorFromModelCatalogue(catalogue: KClass<*>, uiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
-        return getCatalogue(catalogue.name)?.provideInspector(uiModel.qualifiedName!!) ?: provideInspectorFromUiModelRaw(uiModel)
+        return getCatalogue(catalogue.name)?.provideInspector(uiModel) ?: provideInspectorFromUiModelRaw(uiModel)
     }
 
     /**
@@ -76,7 +76,7 @@ object Novalles {
      */
     fun provideInspectorFromInstructorCatalogue(catalogue: KClass<*>, instructor: KClass<Instructor>): Inspector<Instructor, Any, Any> {
         val model = instructor.findAnnotation<Instruction>()?.model ?: throw Exception("Invalid instruction class")
-        return getCatalogue(catalogue.name)?.provideInspector(model.qualifiedName!!) ?: provideInspectorFromInstructor(instructor)
+        return getCatalogue(catalogue.name)?.provideInspector(model) ?: provideInspectorFromInstructor(instructor)
     }
 
     /**
