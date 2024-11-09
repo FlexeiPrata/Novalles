@@ -15,14 +15,14 @@ annotation class UIModel
  * First value annotated with it will be used in comparison inside [UIModelHelper.areItemsTheSame].
  * This value will be also ignored during [UIModelHelper.areContentsTheSame].
  */
-@Target(AnnotationTarget.PROPERTY)
+@Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.SOURCE)
 annotation class PrimaryTag
 
 /**
  * This value will not be used during [UIModelHelper.areContentsTheSame] comparison.
  */
-@Target(AnnotationTarget.PROPERTY)
+@Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.SOURCE)
 annotation class NonUIProperty
 
@@ -35,6 +35,6 @@ annotation class NonUIProperty
  * This annotation may cause errors, so be aware to handle it properly.
  */
 @Deprecated("This annotation is now obsolete and soon will be removed from the Novalles library. Consider using embedded values as separated field in your UI model.")
-@Target(AnnotationTarget.PROPERTY)
+@Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.SOURCE)
 annotation class Decompose

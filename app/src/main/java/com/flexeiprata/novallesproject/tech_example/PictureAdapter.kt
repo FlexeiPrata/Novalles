@@ -90,14 +90,6 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
             binding.image.setBackgroundColor(image)
         }
 
-        /*fun setLeftInLine(color: Int) {
-            binding.colour.animateColors(color)
-        }
-
-        fun setRightInLine(color: Int) {
-            binding.colourSecond.animateColors(color)
-        }*/
-
         fun bindLeftInLine(color: Int) {
             binding.colour.setBackgroundColor(color)
         }

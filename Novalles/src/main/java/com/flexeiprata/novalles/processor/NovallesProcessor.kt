@@ -5,7 +5,9 @@ import com.flexeiprata.novalles.annotations.BindOnFields
 import com.flexeiprata.novalles.annotations.BindOnTag
 import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.annotations.Instruction
+import com.flexeiprata.novalles.annotations.NonUIProperty
 import com.flexeiprata.novalles.annotations.NovallesCatalogue
+import com.flexeiprata.novalles.annotations.PrimaryTag
 import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Inspector
 import com.flexeiprata.novalles.interfaces.UIModelHelper
@@ -29,6 +31,8 @@ import com.flexeiprata.novalles.utils.writingtools.retrieveArg
 import com.flexeiprata.novalles.utils.writingtools.writeAsVariable
 import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.closestClassDeclaration
+import com.google.devtools.ksp.getAnnotationsByType
+import com.google.devtools.ksp.isAnnotationPresent
 import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
@@ -92,6 +96,7 @@ class NovallesProcessor(
                 appendIn("class NovallesCatalogue${module.simpleName.asString()}: Catalogue { ")
                 newLine()
                 incrementLevel()
+                appendIn("@Suppress(\"UNCHECKED_CAST\")")
                 appendIn(
                     funHeaderBuilder(
                         name = "provideUiModel",
@@ -112,6 +117,7 @@ class NovallesProcessor(
                 appendIn("return helper as UIModelHelper<T>")
                 appendDown("}")
                 newLine()
+                appendIn("@Suppress(\"UNCHECKED_CAST\")")
                 appendIn(
                     funHeaderBuilder(
                         name = "provideInspector",
@@ -395,8 +401,6 @@ class NovallesProcessor(
 
     private inner class UIModelVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
 
-
-        @OptIn(KspExperimental::class)
         override fun visitClassDeclaration(
             classDeclaration: KSClassDeclaration, data: Unit
         ) {
@@ -410,9 +414,6 @@ class NovallesProcessor(
                 parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.PrimaryTag.name } != null
             } ?: classDeclaration.primaryConstructor?.parameters?.first() ?: return
 
-            //TODO: check on the exact version
-            //TODO: check if fields are registered
-            //TODO: check annotation
             val notUI = constructor.parameters.filter { parameter ->
                 parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.NonUIProperty.name } != null
             }
@@ -420,7 +421,6 @@ class NovallesProcessor(
             val decomposedFields = constructor.parameters.filter { parameter ->
                 parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.Decompose.name } != null
             }
-            //logger.warn("${constructor.parameters.map { "$it to ${it.annotations.toList()}" }}")
 
             decomposedFields.forEach {
                 errorHandler.checkDecomposedValue(classDeclaration, it)

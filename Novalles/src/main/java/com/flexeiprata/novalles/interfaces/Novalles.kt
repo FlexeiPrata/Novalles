@@ -8,6 +8,7 @@ import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.InspectorOfP
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.InspectorOfPayloadsIndirect
 import com.flexeiprata.novalles.interfaces.Novalles.ProviderOptions.UIModelInterface
 import com.flexeiprata.novalles.utils.writingtools.tryNull
+import java.util.logging.Logger
 import kotlin.jvm.internal.Reflection
 import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotation
@@ -59,7 +60,10 @@ object Novalles {
      * You should have one [NovallesCatalogue] class per module and provide it in the [catalogue] field.
      */
     fun <T : Any, R : Any> provideUiInterfaceForAsFromCatalogue(catalogue: KClass<*>, clazz: KClass<T>): UIModelHelper<R> {
-        return getCatalogue(catalogue.name)?.provideUiModel(clazz) ?: provideUiInterfaceForAs(clazz)
+        return getCatalogue(catalogue.name)?.provideUiModel(clazz) ?: run {
+            println("Novalles warning :: UI Interface ${clazz.simpleName} cannot be created from catalogue.")
+            provideUiInterfaceForAs(clazz)
+        }
     }
 
     /**
@@ -67,7 +71,10 @@ object Novalles {
      * You should have one [NovallesCatalogue] class per module and provide it in the [catalogue] field.
      */
     fun provideInspectorFromModelCatalogue(catalogue: KClass<*>, uiModel: KClass<out Any>): Inspector<Instructor, Any, Any> {
-        return getCatalogue(catalogue.name)?.provideInspector(uiModel) ?: provideInspectorFromUiModelRaw(uiModel)
+        return getCatalogue(catalogue.name)?.provideInspector(uiModel) ?: run {
+            println("Novalles warning :: model ${uiModel.simpleName} cannot be created from catalogue.")
+            provideInspectorFromUiModelRaw(uiModel)
+        }
     }
 
     /**

@@ -5,13 +5,6 @@
 [![License](https://img.shields.io/badge/License%20-Apache%202-337ab7.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![](https://jitpack.io/v/FlexeiPrata/Novalles.svg)](https://jitpack.io/#FlexeiPrata/Novalles)
 
-**Because of recent [issues](https://github.com/google/ksp/issues/1562) of KSP library, some annotations do not work as expected.**
-
-Affected annotations:
-1. **Primary tag** - does not work. Your tag will be always set as a first property of your UI model.
-2. **NonUiProperty** - does not work. You'll get corresponding warnings in the logger, even if the annotation is set.
-3. **Decompose** - does not work. You should replace it with separate fields.
-
 ****
 
 ## How to use
@@ -39,9 +32,12 @@ data class PictureUIModel(
 
 ````kotlin
 private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(MainCatalogue::class, PictureUIModel::class)
+//or
+private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceFor(PictureUIModel::class)
+//or another variant listed above
 ````
 
-**Note**: You should have a single class/object annotated with NovallesCatalogue annotation to enable catalogue feature.
+**Note**: You should have a single class/object annotated with NovallesCatalogue annotation to enable catalogue feature. **This feature is experimental** and may be changed in future.
 
 ````kotlin
 @NovallesCatalogue
@@ -208,8 +204,6 @@ data class PictureUIModel(
 
 ### Decompose annotations (Deprecated)
 #### Decompose annotation is deprecated and will be removed later. Consider replacement of decomposed value with separate fields in your UI model.
-
-_**Note:** see the issue section on the top of the README_
 
 Value, annotated with **Decompose** will be decomposed with its own values. For example, if your field have 2
 properties, they will be used in any Novalles' actions separately:
