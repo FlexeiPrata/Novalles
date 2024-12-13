@@ -59,8 +59,9 @@ class NovallesProcessor(
 
         val symbols = resolver.getSymbolsWithAnnotation(UIModel::class.qualifiedName!!)
         val instructors = resolver.getSymbolsWithAnnotation(Instruction::class.qualifiedName!!)
+        val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!).firstOrNull() as? KSClassDeclaration?
 
-        if (symbols.count() == 0 && instructors.count() == 0) return emptyList()
+        if (symbols.count() == 0 && instructors.count() == 0 && catalogue == null) return emptyList()
 
         val dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray())
 
@@ -76,7 +77,6 @@ class NovallesProcessor(
             catalogInstruction.clear()
         }
 
-        val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!).firstOrNull() as? KSClassDeclaration?
         if (catalogue != null) {
             createCatalogue(symbols + instructors, dependencies, loadIntermediateData().first)
         }
