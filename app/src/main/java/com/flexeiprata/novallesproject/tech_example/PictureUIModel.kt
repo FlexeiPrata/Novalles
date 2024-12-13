@@ -1,4 +1,4 @@
-package com.flexeiprata.novallesproject.tech_example
+ package com.flexeiprata.novallesproject.tech_example
 
 import com.flexeiprata.novalles.annotations.Decompose
 import com.flexeiprata.novalles.annotations.NonUIProperty

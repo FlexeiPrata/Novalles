@@ -38,10 +38,12 @@ private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterf
 ````
 
 **Note**: You should have a single class/object annotated with NovallesCatalogue annotation to enable catalogue feature. **This feature is experimental** and may be changed in future.
+Catalogue feature works faster because it avoids reflection and call constructors directly.
 
 ````kotlin
 @NovallesCatalogue
 object MainCatalogue
+//Or you can annotate your application class
 ````
 
 3. Call relevant functions of _UIModelHelper_ in your DiffUtil. This example uses diffUtil based on common interface.
@@ -49,7 +51,7 @@ object MainCatalogue
 ````kotlin
 class DefaultDiffUtil<T : BaseUiModel>(uiModel: KClass<T>) : DiffUtil.ItemCallback<BaseUiModel>() {
 
-    private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(MainCatalogue::class, uiModel)
+    private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(uiModel)
 
     override fun areItemsTheSame(oldItem: BaseUiModel, newItem: BaseUiModel): Boolean {
         return oldItem.areItemsTheSame(newItem, uiModelHelper)
@@ -129,8 +131,8 @@ So you should be careful when use it.
 private val inspector = Novalles.provideInspectorFromUiModel<PictureUIModel>()
 private val inspector = Novalles.provideInspectorFromUiModelRaw(PictureUIModel::class)
 private val inspector = Novalles.provideInspectorFromInstructor(PictureInstructor::class)
-private val inspector = Novalles.provideInspectorFromModelCatalogue(MainCatalogue::class, PictureUIModel::class)
-private val inspector = Novalles.provideInspectorFromInstructorCatalogue(MainCatalogue::class, PictureInstructor::class)
+private val inspector = Novalles.provideInspectorFromModelCatalogue(PictureUIModel::class)
+private val inspector = Novalles.provideInspectorFromInstructorCatalogue(PictureInstructor::class)
 ````
 
 6. Invoke _Inspector.**inspectPayloads**_ with 4 arguments: your payload,

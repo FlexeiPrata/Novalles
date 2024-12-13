@@ -5,9 +5,7 @@ import com.flexeiprata.novalles.annotations.BindOnFields
 import com.flexeiprata.novalles.annotations.BindOnTag
 import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.annotations.Instruction
-import com.flexeiprata.novalles.annotations.NonUIProperty
 import com.flexeiprata.novalles.annotations.NovallesCatalogue
-import com.flexeiprata.novalles.annotations.PrimaryTag
 import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Inspector
 import com.flexeiprata.novalles.interfaces.UIModelHelper
@@ -29,10 +27,7 @@ import com.flexeiprata.novalles.utils.writingtools.isFirstArgNullable
 import com.flexeiprata.novalles.utils.writingtools.newLine
 import com.flexeiprata.novalles.utils.writingtools.retrieveArg
 import com.flexeiprata.novalles.utils.writingtools.writeAsVariable
-import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.closestClassDeclaration
-import com.google.devtools.ksp.getAnnotationsByType
-import com.google.devtools.ksp.isAnnotationPresent
 import com.google.devtools.ksp.isPublic
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
@@ -45,6 +40,9 @@ import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import java.io.File
 
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
@@ -62,6 +60,8 @@ class NovallesProcessor(
         val symbols = resolver.getSymbolsWithAnnotation(UIModel::class.qualifiedName!!)
         val instructors = resolver.getSymbolsWithAnnotation(Instruction::class.qualifiedName!!)
 
+        if (symbols.count() == 0 && instructors.count() == 0) return emptyList()
+
         val dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray())
 
         symbols.filter { it is KSClassDeclaration && it.validate() }
@@ -70,16 +70,64 @@ class NovallesProcessor(
         instructors.filter { it is KSClassDeclaration && it.validate() }
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
 
-        val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!).firstOrNull() as? KSClassDeclaration?
+        getModuleName(symbols)?.let { module ->
+            saveIntermediateData(catalogUIModels, catalogInstruction, module)
+            catalogUIModels.clear()
+            catalogInstruction.clear()
+        }
 
+        val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!).firstOrNull() as? KSClassDeclaration?
         if (catalogue != null) {
-            createCatalogue(symbols + instructors, dependencies, catalogue)
+            createCatalogue(symbols + instructors, dependencies, loadIntermediateData().first)
         }
 
         return symbols.plus(instructors).filterNot { it.validate() }.toList()
     }
 
-    private fun createCatalogue(classes: Sequence<KSAnnotated>, dependencies: Dependencies, module: KSClassDeclaration) {
+    private fun saveIntermediateData(
+        catalogUIModels: Map<String, String>,
+        catalogInstruction: Map<String, String>,
+        moduleName: String
+    ) {
+        // Define your custom directory for intermediate files
+        val outputDir = File("build/generated/intermediate-ksp/catalogues")
+        if (!outputDir.exists()) {
+            outputDir.mkdirs()
+        }
+
+        // Write data to a JSON file for this module
+        val outputFile = File(outputDir, "$moduleName.json")
+        val jsonData = mapOf(
+            "uiModels" to catalogUIModels,
+            "instructions" to catalogInstruction
+        )
+        outputFile.writeText(Json.encodeToString(jsonData))
+    }
+
+    private fun loadIntermediateData(): Pair<Map<String, String>, Map<String, String>> {
+        val catalogUIModels = mutableMapOf<String, String>()
+        val catalogInstructions = mutableMapOf<String, String>()
+
+        val catalogFiles = File("build/generated/intermediate-ksp/catalogues").listFiles { _, name ->
+            name.endsWith(".json")
+        } ?: emptyArray()
+
+        for (file in catalogFiles) {
+            val jsonData = Json.decodeFromString<Map<String, Map<String, String>>>(file.readText())
+            catalogUIModels.putAll(jsonData["uiModels"] ?: emptyMap())
+            catalogInstructions.putAll(jsonData["instructions"] ?: emptyMap())
+            file.deleteRecursively()
+        }
+
+
+        return Pair(catalogUIModels, catalogInstructions)
+    }
+
+    private fun createCatalogue(
+        classes: Sequence<KSAnnotated>,
+        dependencies: Dependencies,
+        catalogUIModels: Map<String, String>
+    ) {
         //UI model catalogue
         val fileString = buildString {
             buildIn {
@@ -93,7 +141,7 @@ class NovallesProcessor(
                 appendIn("import com.flexeiprata.novalles.interfaces.Instructor")
                 newLine()
                 appendIn("@Keep")
-                appendIn("class NovallesCatalogue${module.simpleName.asString()}: Catalogue { ")
+                appendIn("class NovallesCatalogue: Catalogue { ")
                 newLine()
                 incrementLevel()
                 appendIn("@Suppress(\"UNCHECKED_CAST\")")
@@ -109,8 +157,8 @@ class NovallesProcessor(
                 incrementLevel()
                 appendIn("val helper = when (clazz) {")
                 incrementLevel()
-                catalogUIModels.keys.forEach { clazz ->
-                    appendIn("$clazz::class -> ${catalogUIModels[clazz]}")
+                for ((key, value) in catalogUIModels) {
+                    appendIn("$key::class -> $value")
                 }
                 appendIn("else -> return null")
                 appendDown("}")
@@ -130,8 +178,8 @@ class NovallesProcessor(
                 incrementLevel()
                 appendIn("val helper = when (clazz) {")
                 incrementLevel()
-                catalogUIModels.keys.forEach { clazz ->
-                    appendIn("$clazz::class -> ${catalogInstruction[clazz]?.replace("PayloadOfUIModel", "Inspector")}()")
+                for ((key, value) in catalogUIModels) {
+                    appendIn("$key::class -> ${value.replace("UIHelper", "Inspector")}")
                 }
                 appendIn("else -> return null")
                 appendDown("}")
@@ -144,7 +192,7 @@ class NovallesProcessor(
         val file = codeGenerator.createNewFile(
             dependencies,
             "ksp.novalles.catalogues",
-            "NovallesCatalogue$module"
+            "NovallesCatalogue"
         )
         file.write(fileString.toByteArray())
         codeGenerator.associateWithClasses(
@@ -701,6 +749,17 @@ class NovallesProcessor(
             file.write(fileText.toByteArray())
 
         }
+    }
+
+    private fun getModuleName(symbols: Sequence<KSAnnotated>): String? {
+        val firstFile = symbols
+            .mapNotNull { (it as? KSClassDeclaration)?.containingFile }
+            .firstOrNull() ?: return null
+
+        val path = firstFile.filePath
+        val segments = path.split(File.separator)
+        return segments.find { it.equals("src", ignoreCase = true) }
+            ?.let { segments.getOrNull(segments.indexOf(it) - 1) }
     }
 
 }

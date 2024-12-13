@@ -24,7 +24,7 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
         DefaultDiffUtil(PictureUIModel::class)
     ) {
 
-    private val inspector = provideInspectorFromModelCatalogue(MainCatalogue::class, PictureUIModel::class)
+    private val inspector = provideInspectorFromModelCatalogue(PictureUIModel::class)
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PictureViewHolder {
         return PictureViewHolder(
