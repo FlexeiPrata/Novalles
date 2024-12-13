@@ -81,7 +81,7 @@ class NovallesProcessor(
             createCatalogue(symbols + instructors, dependencies, loadIntermediateData().first)
         }
 
-        return symbols.plus(instructors).filterNot { it.validate() }.toList()
+        return (symbols + instructors + (catalogue?.let { listOf(it) } ?: emptyList())).filterNot { it.validate() }.toList()
     }
 
     private fun saveIntermediateData(
@@ -116,7 +116,7 @@ class NovallesProcessor(
             val jsonData = Json.decodeFromString<Map<String, Map<String, String>>>(file.readText())
             catalogUIModels.putAll(jsonData["uiModels"] ?: emptyMap())
             catalogInstructions.putAll(jsonData["instructions"] ?: emptyMap())
-            file.deleteRecursively()
+            //file.deleteRecursively()
         }
 
 
@@ -752,14 +752,7 @@ class NovallesProcessor(
     }
 
     private fun getModuleName(symbols: Sequence<KSAnnotated>): String? {
-        val firstFile = symbols
-            .mapNotNull { (it as? KSClassDeclaration)?.containingFile }
-            .firstOrNull() ?: return null
-
-        val path = firstFile.filePath
-        val segments = path.split(File.separator)
-        return segments.find { it.equals("src", ignoreCase = true) }
-            ?.let { segments.getOrNull(segments.indexOf(it) - 1) }
+        return symbols.hashCode().toString()
     }
 
 }
