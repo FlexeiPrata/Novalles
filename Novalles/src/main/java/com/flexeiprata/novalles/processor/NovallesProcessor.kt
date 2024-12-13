@@ -72,13 +72,22 @@ class NovallesProcessor(
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
 
         getModuleName(symbols)?.let { module ->
-            saveIntermediateData(catalogUIModels, catalogInstruction, module)
+
+            val initial = dependencies.originatingFiles.firstOrNull()?.filePath?.split("/")
+            if (initial != null) {
+                val path = initial.subList(0, initial.indexOf("src") - 1).joinToString("/") + "/app/novalles-tmp"
+                saveIntermediateData(catalogUIModels, catalogInstruction, module, path)
+            }
             catalogUIModels.clear()
             catalogInstruction.clear()
         }
 
         if (catalogue != null) {
-            createCatalogue(symbols + instructors, dependencies, loadIntermediateData().first)
+            val initial = dependencies.originatingFiles.firstOrNull()?.filePath?.split("/")
+            if (initial != null) {
+                val path = initial.subList(0, initial.indexOf("src") - 1).joinToString("/") + "/app/novalles-tmp"
+                createCatalogue(symbols + instructors, dependencies, loadIntermediateData(path).first)
+            }
         }
 
         return (symbols + instructors + (catalogue?.let { listOf(it) } ?: emptyList())).filterNot { it.validate() }.toList()
@@ -87,10 +96,11 @@ class NovallesProcessor(
     private fun saveIntermediateData(
         catalogUIModels: Map<String, String>,
         catalogInstruction: Map<String, String>,
-        moduleName: String
+        moduleName: String,
+        path: String
     ) {
         // Define your custom directory for intermediate files
-        val outputDir = File("build/generated/intermediate-ksp/catalogues")
+        val outputDir = File(path)
         if (!outputDir.exists()) {
             outputDir.mkdirs()
         }
@@ -104,11 +114,11 @@ class NovallesProcessor(
         outputFile.writeText(Json.encodeToString(jsonData))
     }
 
-    private fun loadIntermediateData(): Pair<Map<String, String>, Map<String, String>> {
+    private fun loadIntermediateData(path: String): Pair<Map<String, String>, Map<String, String>> {
         val catalogUIModels = mutableMapOf<String, String>()
         val catalogInstructions = mutableMapOf<String, String>()
 
-        val catalogFiles = File("build/generated/intermediate-ksp/catalogues").listFiles { _, name ->
+        val catalogFiles = File(path).listFiles { _, name ->
             name.endsWith(".json")
         } ?: emptyArray()
 
@@ -116,8 +126,9 @@ class NovallesProcessor(
             val jsonData = Json.decodeFromString<Map<String, Map<String, String>>>(file.readText())
             catalogUIModels.putAll(jsonData["uiModels"] ?: emptyMap())
             catalogInstructions.putAll(jsonData["instructions"] ?: emptyMap())
-            //file.deleteRecursively()
         }
+
+        File(path).deleteRecursively()
 
 
         return Pair(catalogUIModels, catalogInstructions)
