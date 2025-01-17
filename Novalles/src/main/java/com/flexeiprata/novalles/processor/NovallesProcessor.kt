@@ -26,6 +26,7 @@ import com.flexeiprata.novalles.utils.writingtools.hasAnnotation
 import com.flexeiprata.novalles.utils.writingtools.isFirstArgNullable
 import com.flexeiprata.novalles.utils.writingtools.newLine
 import com.flexeiprata.novalles.utils.writingtools.retrieveArg
+import com.flexeiprata.novalles.utils.writingtools.tryNull
 import com.flexeiprata.novalles.utils.writingtools.writeAsVariable
 import com.google.devtools.ksp.closestClassDeclaration
 import com.google.devtools.ksp.isPublic
@@ -71,21 +72,17 @@ class NovallesProcessor(
         instructors.filter { it is KSClassDeclaration && it.validate() }
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
 
-        getModuleName(symbols)?.let { module ->
 
-            val initial = dependencies.originatingFiles.firstOrNull()?.filePath?.split("/")
-            if (initial != null && initial.contains("src")) {
-                val path = initial.subList(0, initial.indexOf("src") - 1).joinToString("/") + "/app/novalles-tmp"
+        getModuleName(symbols)?.let { module ->
+            getModulePath(symbols)?.let { path ->
                 saveIntermediateData(catalogUIModels, catalogInstruction, module, path)
+                catalogUIModels.clear()
+                catalogInstruction.clear()
             }
-            catalogUIModels.clear()
-            catalogInstruction.clear()
         }
 
         if (catalogue != null) {
-            val initial = dependencies.originatingFiles.firstOrNull()?.filePath?.split("/")
-            if (initial != null && initial.contains("src")) {
-                val path = initial.subList(0, initial.indexOf("src") - 1).joinToString("/") + "/app/novalles-tmp"
+            getModulePath(symbols)?.let { path ->
                 createCatalogue(symbols + instructors, dependencies, loadIntermediateData(path).first)
             }
         }
@@ -764,6 +761,21 @@ class NovallesProcessor(
 
     private fun getModuleName(symbols: Sequence<KSAnnotated>): String? {
         return symbols.hashCode().toString()
+    }
+
+    private fun getModulePath(symbols: Sequence<KSAnnotated>): String? {
+        return tryNull {
+            val initial = (symbols.first {
+                it is KSClassDeclaration && it.containingFile?.filePath?.contains("src") == true
+            } as KSClassDeclaration).containingFile?.filePath?.split("/") ?: return null
+            logger.warn(initial.toString())
+            if (initial.contains("src")) {
+                val path = initial.subList(0, initial.indexOf("src") - 1).joinToString("/") + "/app/novalles-tmp"
+                path
+            } else {
+                null
+            }
+        }
     }
 
 }
