@@ -43,7 +43,6 @@ import com.google.devtools.ksp.validate
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
-import kotlin.math.log
 
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
@@ -75,7 +74,7 @@ class NovallesProcessor(
         getModuleName(symbols)?.let { module ->
 
             val initial = dependencies.originatingFiles.firstOrNull()?.filePath?.split("/")
-            if (initial != null && initial.contains("src")) {
+            if (initial != null) {
                 val path = initial.subList(0, initial.indexOf("src") - 1).joinToString("/") + "/app/novalles-tmp"
                 saveIntermediateData(catalogUIModels, catalogInstruction, module, path)
             }
@@ -85,7 +84,7 @@ class NovallesProcessor(
 
         if (catalogue != null) {
             val initial = dependencies.originatingFiles.firstOrNull()?.filePath?.split("/")
-            if (initial != null && initial.contains("src")) {
+            if (initial != null) {
                 val path = initial.subList(0, initial.indexOf("src") - 1).joinToString("/") + "/app/novalles-tmp"
                 createCatalogue(symbols + instructors, dependencies, loadIntermediateData(path).first)
             }
