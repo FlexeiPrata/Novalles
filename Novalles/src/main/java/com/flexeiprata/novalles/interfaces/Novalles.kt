@@ -201,7 +201,7 @@ object Novalles {
         inline fun <reified R> provide(vararg args: Any): R? {
             val constructor = clazz.primaryConstructor ?: return null
             val obj = constructor.call(*args)
-            return if (obj is R) obj else null
+            return obj as? R
         }
     }
 

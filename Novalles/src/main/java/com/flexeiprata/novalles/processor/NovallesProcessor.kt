@@ -6,6 +6,7 @@ import com.flexeiprata.novalles.annotations.BindOnTag
 import com.flexeiprata.novalles.annotations.BindViewHolder
 import com.flexeiprata.novalles.annotations.Instruction
 import com.flexeiprata.novalles.annotations.NovallesCatalogue
+import com.flexeiprata.novalles.annotations.NovallesPage
 import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Inspector
 import com.flexeiprata.novalles.interfaces.UIModelHelper
@@ -24,6 +25,7 @@ import com.flexeiprata.novalles.utils.writingtools.findAnnotation
 import com.flexeiprata.novalles.utils.writingtools.funHeaderBuilder
 import com.flexeiprata.novalles.utils.writingtools.hasAnnotation
 import com.flexeiprata.novalles.utils.writingtools.isFirstArgNullable
+import com.flexeiprata.novalles.utils.writingtools.lowercaseFirst
 import com.flexeiprata.novalles.utils.writingtools.newLine
 import com.flexeiprata.novalles.utils.writingtools.retrieveArg
 import com.flexeiprata.novalles.utils.writingtools.tryNull
@@ -41,9 +43,6 @@ import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
-import java.io.File
 
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
@@ -60,7 +59,10 @@ class NovallesProcessor(
 
         val symbols = resolver.getSymbolsWithAnnotation(UIModel::class.qualifiedName!!)
         val instructors = resolver.getSymbolsWithAnnotation(Instruction::class.qualifiedName!!)
-        val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!).firstOrNull() as? KSClassDeclaration?
+        val pages = resolver.getSymbolsWithAnnotation(NovallesPage::class.qualifiedName!!)
+            .firstOrNull() as? KSClassDeclaration?
+        val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!)
+            .firstOrNull() as? KSClassDeclaration?
 
         if (symbols.count() == 0 && instructors.count() == 0 && catalogue == null) return emptyList()
 
@@ -72,86 +74,67 @@ class NovallesProcessor(
         instructors.filter { it is KSClassDeclaration && it.validate() }
             .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
 
-
-        getModuleName(symbols)?.let { module ->
-            getModulePath(symbols)?.let { path ->
-                saveIntermediateData(catalogUIModels, catalogInstruction, module, path)
-                catalogUIModels.clear()
-                catalogInstruction.clear()
-            }
+        if (pages != null) {
+            createPage(pages, symbols + instructors, dependencies)
         }
 
         if (catalogue != null) {
-            getModulePath(symbols)?.let { path ->
-                createCatalogue(symbols + instructors, dependencies, loadIntermediateData(path).first)
-            }
+            createCatalogue(
+                catalogue,
+                symbols + instructors,
+                dependencies
+            )
         }
 
-        return (symbols + instructors + (catalogue?.let { listOf(it) } ?: emptyList())).filterNot { it.validate() }.toList()
+        return (symbols + instructors + (catalogue?.let { listOf(it) }
+            ?: emptyList())).filterNot { it.validate() }.toList()
     }
 
-    private fun saveIntermediateData(
-        catalogUIModels: Map<String, String>,
-        catalogInstruction: Map<String, String>,
-        moduleName: String,
-        path: String
-    ) {
-        // Define your custom directory for intermediate files
-        val outputDir = File(path)
-        if (!outputDir.exists()) {
-            outputDir.mkdirs()
-        }
-
-        // Write data to a JSON file for this module
-        val outputFile = File(outputDir, "$moduleName.json")
-        val jsonData = mapOf(
-            "uiModels" to catalogUIModels,
-            "instructions" to catalogInstruction
-        )
-        outputFile.writeText(Json.encodeToString(jsonData))
-    }
-
-    private fun loadIntermediateData(path: String): Pair<Map<String, String>, Map<String, String>> {
-        val catalogUIModels = mutableMapOf<String, String>()
-        val catalogInstructions = mutableMapOf<String, String>()
-
-        val catalogFiles = File(path).listFiles { _, name ->
-            name.endsWith(".json")
-        } ?: emptyArray()
-
-        for (file in catalogFiles) {
-            val jsonData = Json.decodeFromString<Map<String, Map<String, String>>>(file.readText())
-            catalogUIModels.putAll(jsonData["uiModels"] ?: emptyMap())
-            catalogInstructions.putAll(jsonData["instructions"] ?: emptyMap())
-        }
-
-        File(path).deleteRecursively()
-
-
-        return Pair(catalogUIModels, catalogInstructions)
-    }
-
-    private fun createCatalogue(
+    private fun createPage(
+        pages: KSClassDeclaration,
         classes: Sequence<KSAnnotated>,
-        dependencies: Dependencies,
-        catalogUIModels: Map<String, String>
+        dependencies: Dependencies
     ) {
-        //UI model catalogue
         val fileString = buildString {
             buildIn {
                 appendIn("package ksp.novalles.catalogues")
                 newLine()
                 appendIn("import ${UIModelHelper::class.qualifiedName}")
                 appendIn("import kotlin.reflect.KClass")
-                appendIn("import com.flexeiprata.novalles.interfaces.Catalogue")
+                appendIn("import com.flexeiprata.novalles.interfaces.CataloguePage")
                 appendIn("import androidx.annotation.Keep")
                 appendIn("import com.flexeiprata.novalles.interfaces.Inspector")
                 appendIn("import com.flexeiprata.novalles.interfaces.Instructor")
                 newLine()
                 appendIn("@Keep")
-                appendIn("class NovallesCatalogue: Catalogue { ")
+                appendIn("class ${pages.simpleName.getShortName()}: CataloguePage { ")
+                newLine()
                 newLine()
                 incrementLevel()
+                appendIn("@Suppress(\"UNCHECKED_CAST\")")
+                appendIn(
+                    funHeaderBuilder(
+                        name = "eligible",
+                        args = listOf("clazz: KClass<*>"),
+                        returnType = "Boolean",
+                        isOverridden = true
+                    )
+                )
+                incrementLevel()
+                appendIn("return when (clazz) {")
+                incrementLevel()
+                val classesList = catalogUIModels.keys.joinToString(
+                    separator = ",\n$tabs",
+                    prefix = "",
+                    postfix = "",
+                    truncated = "",
+                ) {
+                    "${it}::class"
+                }
+                appendIn("$classesList -> true")
+                appendIn("else -> false")
+                closeFunctions(1)
+                newLine()
                 appendIn("@Suppress(\"UNCHECKED_CAST\")")
                 appendIn(
                     funHeaderBuilder(
@@ -196,6 +179,97 @@ class NovallesProcessor(
                 closeFunctions()
             }
         }
+        val file = codeGenerator.createNewFile(
+            dependencies,
+            "ksp.novalles.catalogues",
+            pages.simpleName.getShortName()
+        )
+        file.write(fileString.toByteArray())
+        codeGenerator.associateWithClasses(
+            classes.filter { it is KSClassDeclaration }.map { it as KSClassDeclaration }.toList(),
+            "ksp.novalles.catalogues",
+            pages.simpleName.getShortName()
+        )
+    }
+
+    private fun createCatalogue(
+        catalogue: KSClassDeclaration,
+        classes: Sequence<KSAnnotated>,
+        dependencies: Dependencies,
+    ) {
+
+        val pagesRaw = catalogue.findAnnotation(NovallesCatalogue::class)?.arguments?.first()?.value as ArrayList<*>
+        val pages = pagesRaw.filterIsInstance<KSType>()
+
+        //UI model catalogue
+        val fileString = buildString {
+            buildIn {
+                appendIn("package ksp.novalles.catalogues")
+                newLine()
+                appendIn("import ${UIModelHelper::class.qualifiedName}")
+                appendIn("import kotlin.reflect.KClass")
+                appendIn("import com.flexeiprata.novalles.interfaces.Catalogue")
+                appendIn("import androidx.annotation.Keep")
+                appendIn("import com.flexeiprata.novalles.interfaces.Inspector")
+                appendIn("import com.flexeiprata.novalles.interfaces.Instructor")
+                pages.mapNotNull { it.declaration.qualifiedName }.forEach { page ->
+                    appendIn("import ksp.novalles.catalogues.${page.getShortName()}")
+                }
+                newLine()
+                appendIn("@Keep")
+                appendIn("class NovallesCatalogue: Catalogue { ")
+                newLine()
+                incrementLevel()
+                newLine()
+                //Values
+                pages.forEach {
+                    appendIn("val ${it.declaration.simpleName.getShortName().lowercaseFirst()} = ${it.declaration.simpleName.getShortName()}()")
+                }
+                newLine()
+                appendIn("@Suppress(\"UNCHECKED_CAST\")")
+                appendIn(
+                    funHeaderBuilder(
+                        name = "provideUiModel",
+                        genericString = "<T>",
+                        args = listOf("clazz: KClass<*>"),
+                        returnType = "UIModelHelper<T>?",
+                        isOverridden = true
+                    )
+                )
+                incrementLevel()
+                appendIn("val helper = when {")
+                incrementLevel()
+                pages.forEach { page ->
+                    appendIn("${page.declaration.simpleName.getShortName().lowercaseFirst()}.eligible(clazz) -> ${page.declaration.simpleName.getShortName().lowercaseFirst()}.provideUiModel<T>(clazz)")
+                }
+                appendIn("else -> return null")
+                appendDown("}")
+                appendIn("return helper as UIModelHelper<T>")
+                appendDown("}")
+                newLine()
+                appendIn("@Suppress(\"UNCHECKED_CAST\")")
+                appendIn(
+                    funHeaderBuilder(
+                        name = "provideInspector",
+                        genericString = "<T: Instructor>",
+                        args = listOf("clazz: KClass<*>"),
+                        returnType = "Inspector<T, Any, Any>?",
+                        isOverridden = true
+                    )
+                )
+                incrementLevel()
+                appendIn("val helper = when {")
+                incrementLevel()
+                pages.forEach { page ->
+                    appendIn("${page.declaration.simpleName.getShortName().lowercaseFirst()}.eligible(clazz) -> ${page.declaration.simpleName.getShortName().lowercaseFirst()}.provideInspector<T>(clazz)")
+                }
+                appendIn("else -> return null")
+                appendDown("}")
+                appendIn("return helper as Inspector<T, Any, Any>")
+                appendDown("}")
+                closeFunctions()
+            }
+        }
 
         val file = codeGenerator.createNewFile(
             dependencies,
@@ -222,7 +296,9 @@ class NovallesProcessor(
             errorHandler.checkInspector(classDeclaration)
 
             val core = classDeclaration.findAnnotation(Instruction::class) ?: throwUnexpected()
-            val model = (core.arguments.first().value as KSType).declaration.closestClassDeclaration() ?: throwUnexpected()
+            val model =
+                (core.arguments.first().value as KSType).declaration.closestClassDeclaration()
+                    ?: throwUnexpected()
             val (viewHolder, prefix, bindPrefix) = extractViewHolderAnnotations(classDeclaration)
             val name = classDeclaration.simpleName.getShortName()
 
@@ -242,7 +318,9 @@ class NovallesProcessor(
             val inspectorMultipleValues = declarationFunctions.filter { function ->
                 function.hasAnnotation(BindOnFields::class)
             }.map { function ->
-                val fields = function.findAnnotation(BindOnFields::class)?.arguments?.first()?.value as ArrayList<*>? ?: throwUnexpected()
+                val fields =
+                    function.findAnnotation(BindOnFields::class)?.arguments?.first()?.value as ArrayList<*>?
+                        ?: throwUnexpected()
                 fields.filterIsInstance<String>().map {
                     InspectorFunDataFlat(
                         name = function.simpleName.getShortName(),
@@ -384,8 +462,10 @@ class NovallesProcessor(
                             function.simpleName.getShortName() == "$prefix${payName}" && function.parameters.size == 1
                         }
 
-                        val viewHolderBaseAutoBinder = viewHolderFun.find(viewHolderBaseBindCondition)
-                        val viewHolderDefaultBinder = viewHolderFun.find(viewHolderPostBindCondition)
+                        val viewHolderBaseAutoBinder =
+                            viewHolderFun.find(viewHolderBaseBindCondition)
+                        val viewHolderDefaultBinder =
+                            viewHolderFun.find(viewHolderPostBindCondition)
 
                         when {
 
@@ -439,16 +519,21 @@ class NovallesProcessor(
             return when {
                 classDeclaration.hasAnnotation(BindViewHolder::class) -> {
                     val annotation =
-                        classDeclaration.findAnnotation(BindViewHolder::class) ?: errorHandler.throwUnexpectedError(classDeclaration)
-                    val viewHolder = (annotation.arguments.retrieveArg<KSType>("viewHolder")).declaration.closestClassDeclaration()
-                        ?: errorHandler.throwUnexpectedError(classDeclaration)
+                        classDeclaration.findAnnotation(BindViewHolder::class)
+                            ?: errorHandler.throwUnexpectedError(classDeclaration)
+                    val viewHolder =
+                        (annotation.arguments.retrieveArg<KSType>("viewHolder")).declaration.closestClassDeclaration()
+                            ?: errorHandler.throwUnexpectedError(classDeclaration)
                     val prefix = annotation.arguments.retrieveArg<String>("prefix")
                     val postfix = annotation.arguments.retrieveArg<String>("bindPrefix")
                     Triple(viewHolder, prefix, postfix)
                 }
 
                 else -> {
-                    errorHandler.logError(classDeclaration, "This class should be annotated with BindViewHolder annotation.")
+                    errorHandler.logError(
+                        classDeclaration,
+                        "This class should be annotated with BindViewHolder annotation."
+                    )
                 }
             }
         }
@@ -485,7 +570,8 @@ class NovallesProcessor(
             val decomposedFieldsValues =
                 decomposedFields.mapNotNull {
                     val resolvedType = it.type.resolve()
-                    val ob = resolvedType.declaration.closestClassDeclaration() ?: return@mapNotNull null
+                    val ob =
+                        resolvedType.declaration.closestClassDeclaration() ?: return@mapNotNull null
                     DecomposedEncapsulation(
                         clazz = ob,
                         fieldName = it.name?.getShortName() ?: return@mapNotNull null,
@@ -498,7 +584,8 @@ class NovallesProcessor(
                     )
                 }
 
-            val fields = constructor.parameters.toList().filterNot { it == key }.filterNot { it in notUI || it in decomposedFields }
+            val fields = constructor.parameters.toList().filterNot { it == key }
+                .filterNot { it in notUI || it in decomposedFields }
             val name = classDeclaration.simpleName.getShortName()
             val import = classDeclaration.qualifiedName?.asString()
             val payloadsBaseInterface = "BasePayload"
@@ -564,7 +651,9 @@ class NovallesProcessor(
                         parameter.type.element?.typeArguments?.forEach Typed@{
                             if (!it.type.isPrimitive()) {
                                 val resolvedElement = it.type?.resolve()
-                                val nameClass = resolvedElement?.declaration?.qualifiedName?.asString() ?: return@Typed
+                                val nameClass =
+                                    resolvedElement?.declaration?.qualifiedName?.asString()
+                                        ?: return@Typed
                                 importsMap[resolvedElement.declaration.qualifiedName?.getShortName()
                                     ?: return@Typed] = nameClass
                             }
@@ -575,16 +664,21 @@ class NovallesProcessor(
                     decomposedValue.params.forEach { parameter ->
                         if (!parameter.type.element.isPrimitive()) {
                             val paramType = parameter.type.resolve()
-                            val clazz = paramType.declaration.qualifiedName?.asString() ?: return@forEach
-                            importsMap[paramType.declaration.qualifiedName?.getShortName() ?: return@forEach] = clazz
+                            val clazz =
+                                paramType.declaration.qualifiedName?.asString() ?: return@forEach
+                            importsMap[paramType.declaration.qualifiedName?.getShortName()
+                                ?: return@forEach] = clazz
                         }
 
                         parameter.type.element?.typeArguments?.forEach Typed@{
                             if (!it.type.isPrimitive()) {
                                 val elementResolved = it.type?.resolve()
 
-                                val nameClass = elementResolved?.declaration?.qualifiedName?.asString() ?: return@Typed
-                                importsMap[elementResolved.declaration.qualifiedName?.getShortName() ?: return@Typed] = nameClass
+                                val nameClass =
+                                    elementResolved?.declaration?.qualifiedName?.asString()
+                                        ?: return@Typed
+                                importsMap[elementResolved.declaration.qualifiedName?.getShortName()
+                                    ?: return@Typed] = nameClass
                             }
                         }
                     }
@@ -634,7 +728,7 @@ class NovallesProcessor(
                     val comparisons = fields.map { "oldItem.$it == newItem.$it\n" }.plus(
                         decomposedFieldsValues.map { parent ->
                             parent.params.joinToString(
-                                separator = "${getTabs()}&& "
+                                separator = "${tabs}&& "
                             ) {
                                 "oldItem.${parent.fieldName}${parent.dot}$it == newItem.${parent.fieldName}${parent.dot}$it\n"
                             }
@@ -644,8 +738,8 @@ class NovallesProcessor(
                     if (comparisons.isNotEmpty()) {
                         append(
                             comparisons.joinToString(
-                                prefix = "${getTabs()}&& ",
-                                separator = "${getTabs()}&& "
+                                prefix = "${tabs}&& ",
+                                separator = "${tabs}&& "
                             )
                         )
                     }
@@ -770,7 +864,8 @@ class NovallesProcessor(
             } as KSClassDeclaration).containingFile?.filePath?.split("/") ?: return null
             logger.warn(initial.toString())
             if (initial.contains("src")) {
-                val path = initial.subList(0, initial.indexOf("src") - 1).joinToString("/") + "/app/novalles-tmp"
+                val path = initial.subList(0, initial.indexOf("src") - 1)
+                    .joinToString("/") + "/app/novalles-tmp"
                 path
             } else {
                 null

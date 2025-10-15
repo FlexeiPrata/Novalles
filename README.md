@@ -37,13 +37,28 @@ private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterf
 //or another variant listed above
 ````
 
-**Note**: You should have a single class/object annotated with NovallesCatalogue annotation to enable catalogue feature. **This feature is experimental** and may be changed in future.
-Catalogue feature works faster because it avoids reflection and call constructors directly.
+**Note**: To enable catalogue feature, you should create a single main catalogue class/object annotated with **NovallesCatalogue**. For large projects, you can organize your models into separate **NovallesPage** classes and reference them in the main catalogue. **This feature is experimental** and may be changed in future.
+Catalogue feature works faster because it avoids reflection and calls constructors directly.
 
 ````kotlin
-@NovallesCatalogue
+//Simple catalogue - all models in one place
+@NovallesCatalogue(pages = [MainPage::class])
 object MainCatalogue
-//Or you can annotate your application class
+
+@NovallesPage
+object MainPage
+
+//Or organize large projects into pages
+@NovallesCatalogue(pages = [PicturesPage::class, UsersPage::class])
+object MainCatalogue
+
+//Pictures module
+@NovallesPage
+object PicturesPage
+
+//Users module
+@NovallesPage
+object UsersPage
 ````
 
 3. Call relevant functions of _UIModelHelper_ in your DiffUtil. This example uses diffUtil based on common interface.

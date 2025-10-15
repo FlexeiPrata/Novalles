@@ -4,12 +4,12 @@ plugins {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_1_8
-    targetCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
 }
 
 dependencies {
-    implementation("com.google.devtools.ksp:symbol-processing-api:1.9.22-1.0.16")
-    implementation "org.jetbrains.kotlin:kotlin-reflect:1.9.22"
-    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3"
+    implementation("com.google.devtools.ksp:symbol-processing-api:2.2.20-2.0.3")
+    implementation "org.jetbrains.kotlin:kotlin-reflect:2.2.20"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0"
 }

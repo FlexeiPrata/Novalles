@@ -39,14 +39,6 @@ internal class StringBuilderTabulator(private val builder: StringBuilder) {
         if (isEOL) builder.append("\n")
     }
 
-    fun getTabs(): String {
-        return StringBuilder().apply {
-            repeat(level) {
-                this.append("\t")
-            }
-        }.toString()
-    }
-
     fun closeFunctions(minLevel: Int = 0) {
         while (level > minLevel) {
             appendDown("}")
@@ -61,6 +53,8 @@ internal class StringBuilderTabulator(private val builder: StringBuilder) {
             builder.append("\t")
         }
     }
+
+    val tabs get() = "\t".repeat(level)
 }
 
 internal fun StringBuilder.newLine(count: Int = 1) {
