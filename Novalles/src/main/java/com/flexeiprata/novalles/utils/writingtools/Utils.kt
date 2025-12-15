@@ -6,8 +6,11 @@ import com.google.devtools.ksp.validate
 import kotlin.reflect.KClass
 
 internal fun KSValueParameter.writeAsVariable(parent: DecomposedEncapsulation? = null): String {
-    return "${this.type.element}${this.type.element?.typeArguments?.toTypeString()}" +
-            if (this.type.resolve().isMarkedNullable || parent?.nullable == true) "?" else ""
+    val resolved = type.resolve()
+    val name = resolved.declaration.simpleName.getShortName()
+    val args = type.element?.typeArguments?.toTypeString().orEmpty()
+    val nullable = if (resolved.isMarkedNullable || parent?.nullable == true) "?" else ""
+    return "$name$args$nullable"
 }
 
 internal inline fun <T> Sequence<T>.findOut(predicate: (T) -> Boolean): Boolean {
@@ -48,11 +51,16 @@ internal inline fun <reified T> List<KSValueArgument>.retrieveArg(name: String):
 internal fun List<KSTypeArgument>.toTypeString(): String {
     return when {
         isNullOrEmpty() -> ""
-        else -> joinToString(
-            prefix = "<",
-            postfix = ">",
-            separator = ", "
-        ) { it.type.toString() + if (it.type?.resolve()?.isMarkedNullable == true) "?" else "" }
+        else -> {
+            joinToString(
+                prefix = "<",
+                postfix = ">",
+                separator = ", "
+            ) {
+                val resolved = it.type!!.resolve()
+                resolved.declaration.simpleName.getShortName() + if (resolved.isMarkedNullable) "?" else ""
+            }
+        }
     }
 }
 
