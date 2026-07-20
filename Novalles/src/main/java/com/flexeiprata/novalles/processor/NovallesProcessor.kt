@@ -11,7 +11,6 @@ import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Inspector
 import com.flexeiprata.novalles.interfaces.UIModelHelper
 import com.flexeiprata.novalles.utils.CachedField
-import com.flexeiprata.novalles.utils.DecomposedEncapsulation
 import com.flexeiprata.novalles.utils.InspectorFunData
 import com.flexeiprata.novalles.utils.InspectorFunDataFlat
 import com.flexeiprata.novalles.utils.KUIAnnotations
@@ -22,13 +21,12 @@ import com.flexeiprata.novalles.utils.writingtools.buildIn
 import com.flexeiprata.novalles.utils.writingtools.capitalizeFirst
 import com.flexeiprata.novalles.utils.writingtools.dataClassConstructor
 import com.flexeiprata.novalles.utils.writingtools.findAnnotation
+import com.flexeiprata.novalles.utils.writingtools.firstWinsBy
 import com.flexeiprata.novalles.utils.writingtools.funHeaderBuilder
-import com.flexeiprata.novalles.utils.writingtools.hasAnnotation
 import com.flexeiprata.novalles.utils.writingtools.isFirstArgNullable
 import com.flexeiprata.novalles.utils.writingtools.lowercaseFirst
 import com.flexeiprata.novalles.utils.writingtools.newLine
 import com.flexeiprata.novalles.utils.writingtools.retrieveArg
-import com.flexeiprata.novalles.utils.writingtools.tryNull
 import com.flexeiprata.novalles.utils.writingtools.writeAsVariable
 import com.google.devtools.ksp.closestClassDeclaration
 import com.google.devtools.ksp.isPublic
@@ -39,65 +37,79 @@ import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
 
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
-    private val logger: KSPLogger,
-    private val options: Map<String, String>
+    private val logger: KSPLogger
 ) : SymbolProcessor {
 
     private val payloadsMap = mutableMapOf<String, MutableList<Payloading>>()
     private val cachedFieldsMap = mutableMapOf<String, MutableList<CachedField>>()
     private val catalogUIModels = mutableMapOf<String, String>()
-    private val catalogInstruction = mutableMapOf<String, String>()
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
 
-        val symbols = resolver.getSymbolsWithAnnotation(UIModel::class.qualifiedName!!)
-        val instructors = resolver.getSymbolsWithAnnotation(Instruction::class.qualifiedName!!)
+        val symbols = resolver.getSymbolsWithAnnotation(UIModel::class.qualifiedName!!).toList()
+        val instructors =
+            resolver.getSymbolsWithAnnotation(Instruction::class.qualifiedName!!).toList()
         val pages = resolver.getSymbolsWithAnnotation(NovallesPage::class.qualifiedName!!)
             .firstOrNull() as? KSClassDeclaration?
         val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!)
             .firstOrNull() as? KSClassDeclaration?
 
-        if (symbols.count() == 0 && instructors.count() == 0 && catalogue == null) return emptyList()
+        if (symbols.isEmpty() && instructors.isEmpty() && catalogue == null) return emptyList()
 
         val dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray())
 
-        symbols.filter { it is KSClassDeclaration && it.validate() }
-            .forEach { it.accept(UIModelVisitor(dependencies), Unit) }
+        //Validate once per symbol: validate() resolves every reachable type reference.
+        val validatedSymbols = symbols.map { it to it.validate() }
+        val validatedInstructors = instructors.map { it to it.validate() }
 
-        instructors.filter { it is KSClassDeclaration && it.validate() }
-            .forEach { it.accept(ViewHoldersVisitor(dependencies), Unit) }
+        validatedSymbols.forEach { (symbol, isValid) ->
+            if (isValid && symbol is KSClassDeclaration) {
+                symbol.accept(UIModelVisitor(dependencies), Unit)
+            }
+        }
+
+        validatedInstructors.forEach { (instructor, isValid) ->
+            if (isValid && instructor is KSClassDeclaration) {
+                instructor.accept(ViewHoldersVisitor(dependencies), Unit)
+            }
+        }
+
+        val contributors = symbols + instructors
 
         if (pages != null) {
-            createPage(pages, symbols + instructors, dependencies)
+            createPage(pages, contributors, dependencies)
         }
 
         if (catalogue != null) {
             createCatalogue(
                 catalogue,
-                symbols + instructors,
+                contributors,
                 dependencies
             )
         }
 
-        return (symbols + instructors + (catalogue?.let { listOf(it) }
-            ?: emptyList())).filterNot { it.validate() }.toList()
+        val deferred = (validatedSymbols + validatedInstructors)
+            .filterNot { (_, isValid) -> isValid }
+            .map { (symbol, _) -> symbol }
+
+        return if (catalogue != null && !catalogue.validate()) deferred + catalogue else deferred
     }
 
     private fun createPage(
         pages: KSClassDeclaration,
-        classes: Sequence<KSAnnotated>,
+        classes: List<KSAnnotated>,
         dependencies: Dependencies
     ) {
         val fileString = buildString {
             buildIn {
-                appendIn("package ksp.novalles.catalogues")
+                appendIn("package $CATALOGUES_PACKAGE")
                 newLine()
                 appendIn("import ${UIModelHelper::class.qualifiedName}")
                 appendIn("import kotlin.reflect.KClass")
@@ -181,20 +193,20 @@ class NovallesProcessor(
         }
         val file = codeGenerator.createNewFile(
             dependencies,
-            "ksp.novalles.catalogues",
+            CATALOGUES_PACKAGE,
             pages.simpleName.getShortName()
         )
         file.write(fileString.toByteArray())
         codeGenerator.associateWithClasses(
-            classes.filter { it is KSClassDeclaration }.map { it as KSClassDeclaration }.toList(),
-            "ksp.novalles.catalogues",
+            classes.filterIsInstance<KSClassDeclaration>(),
+            CATALOGUES_PACKAGE,
             pages.simpleName.getShortName()
         )
     }
 
     private fun createCatalogue(
         catalogue: KSClassDeclaration,
-        classes: Sequence<KSAnnotated>,
+        classes: List<KSAnnotated>,
         dependencies: Dependencies,
     ) {
 
@@ -204,7 +216,7 @@ class NovallesProcessor(
         //UI model catalogue
         val fileString = buildString {
             buildIn {
-                appendIn("package ksp.novalles.catalogues")
+                appendIn("package $CATALOGUES_PACKAGE")
                 newLine()
                 appendIn("import ${UIModelHelper::class.qualifiedName}")
                 appendIn("import kotlin.reflect.KClass")
@@ -213,7 +225,7 @@ class NovallesProcessor(
                 appendIn("import com.flexeiprata.novalles.interfaces.Inspector")
                 appendIn("import com.flexeiprata.novalles.interfaces.Instructor")
                 pages.mapNotNull { it.declaration.qualifiedName }.forEach { page ->
-                    appendIn("import ksp.novalles.catalogues.${page.getShortName()}")
+                    appendIn("import $CATALOGUES_PACKAGE.${page.getShortName()}")
                 }
                 newLine()
                 appendIn("@Keep")
@@ -273,13 +285,13 @@ class NovallesProcessor(
 
         val file = codeGenerator.createNewFile(
             dependencies,
-            "ksp.novalles.catalogues",
+            CATALOGUES_PACKAGE,
             "NovallesCatalogue"
         )
         file.write(fileString.toByteArray())
         codeGenerator.associateWithClasses(
-            classes.filter { it is KSClassDeclaration }.map { it as KSClassDeclaration }.toList(),
-            "ksp.novalles.catalogues",
+            classes.filterIsInstance<KSClassDeclaration>(),
+            CATALOGUES_PACKAGE,
             "NovallesCatalogue"
         )
     }
@@ -302,25 +314,22 @@ class NovallesProcessor(
             val (viewHolder, prefix, bindPrefix) = extractViewHolderAnnotations(classDeclaration)
             val name = classDeclaration.simpleName.getShortName()
 
-            val declarationFunctions = classDeclaration.getAllFunctions()
+            //Materialized once: getAllFunctions() walks the whole supertype closure.
+            val declarationFunctions = classDeclaration.getAllFunctions().toList()
 
-            val inspectorFunctions = declarationFunctions.filter {
-                it.hasAnnotation(BindOn::class)
-            }.map {
+            val inspectorFunctions = declarationFunctions.mapNotNull { function ->
+                val annotation = function.findAnnotation(BindOn::class) ?: return@mapNotNull null
                 InspectorFunData(
-                    name = it.simpleName.getShortName(),
-                    arg = it.annotations.first().arguments.first().value as String,
-                    isNullable = it.parameters.firstOrNull()?.type?.resolve()?.isMarkedNullable,
-                    isBoolean = it.parameters.firstOrNull()?.type?.toString() == "Boolean"
+                    name = function.simpleName.getShortName(),
+                    arg = annotation.arguments.first().value as String,
+                    isNullable = function.parameters.firstOrNull()?.type?.resolve()?.isMarkedNullable,
+                    isBoolean = function.parameters.firstOrNull()?.type?.toString() == "Boolean"
                 )
-            }.toList()
+            }
 
-            val inspectorMultipleValues = declarationFunctions.filter { function ->
-                function.hasAnnotation(BindOnFields::class)
-            }.map { function ->
-                val fields =
-                    function.findAnnotation(BindOnFields::class)?.arguments?.first()?.value as ArrayList<*>?
-                        ?: throwUnexpected()
+            val inspectorMultipleValues = declarationFunctions.mapNotNull { function ->
+                val annotation = function.findAnnotation(BindOnFields::class) ?: return@mapNotNull null
+                val fields = annotation.arguments.first().value as ArrayList<*>? ?: throwUnexpected()
                 fields.filterIsInstance<String>().map {
                     InspectorFunDataFlat(
                         name = function.simpleName.getShortName(),
@@ -329,15 +338,23 @@ class NovallesProcessor(
                 }
             }.flatten()
 
-
-            val tagFunctions = classDeclaration.getAllFunctions().filter {
-                it.hasAnnotation(BindOnTag::class)
-            }.map {
-                it.simpleName.getShortName() to it.findAnnotation(BindOnTag::class)?.arguments?.first()?.value as KSType
+            val tagFunctions = declarationFunctions.mapNotNull { function ->
+                val annotation =
+                    function.findAnnotation(BindOnTag::class) ?: return@mapNotNull null
+                function.simpleName.getShortName() to annotation.arguments.first().value as KSType
             }
 
-            val viewHolderFun =
-                viewHolder.getAllFunctions().filterNot { !it.isPublic() }
+            //Indexed by the name the generated code looks up, keeping find{}'s first-wins semantics.
+            val inspectorFunctionsByField = inspectorFunctions.firstWinsBy { it.arg.capitalizeFirst() }
+            val inspectorMultipleByField = inspectorMultipleValues.firstWinsBy { it.target.capitalizeFirst() }
+
+            //Name -> is-first-arg-nullable. Resolves each binder's first parameter exactly once.
+            val viewHolderBinders = viewHolder.getAllFunctions()
+                .filter { it.isPublic() && it.parameters.size == 1 }
+                .toList()
+                .firstWinsBy { it.simpleName.getShortName() }
+                .mapValues { (_, function) -> function.isFirstArgNullable() }
+
             val payloads = payloadsMap[model.simpleName.getShortName()] ?: emptyList()
             val cachedFields = cachedFieldsMap[model.simpleName.getShortName()] ?: emptyList()
 
@@ -352,10 +369,6 @@ class NovallesProcessor(
                 "com.flexeiprata.novalles.interfaces.Novalles"
             )
 
-            val catalogueName = model.qualifiedName?.asString() ?: ""
-            val catalogueValue = PACKAGE + ".${model.simpleName.getShortName()}PayloadOfUIModel"
-
-            catalogInstruction[catalogueName] = catalogueValue
             val text = buildString {
                 add("package $PACKAGE")
                 listOfImports.forEach {
@@ -378,7 +391,7 @@ class NovallesProcessor(
                     appendIn("if (payloadList.isEmpty()) {")
                     appendUp("doOnBind()")
                     appendDown("}")
-                    if (payloads.isNotEmpty()) {
+                    if (payloads.isNotEmpty() || tagFunctions.isNotEmpty()) {
                         appendIn("payloadList.forEach { payload -> ")
                         appendUp("when (payload) {")
                         incrementLevel()
@@ -386,16 +399,8 @@ class NovallesProcessor(
                         payloads.forEach { payloading ->
                             val payName =
                                 payloading.name.removeSuffix("Changed")
-                            val inspectorFunc = inspectorFunctions.find {
-                                it.arg.capitalizeFirst() == payName
-                            }
-                            val multipleFields = inspectorMultipleValues.find {
-                                it.target.capitalizeFirst() == payName
-                            }
-
-                            val viewHolderAutoBinder =
-                                viewHolderFun.find { it.simpleName.getShortName() == "$prefix${payName}" && it.parameters.size == 1 }
-
+                            val inspectorFunc = inspectorFunctionsByField[payName]
+                            val multipleFields = inspectorMultipleByField[payName]
 
                             val action = when {
 
@@ -411,9 +416,7 @@ class NovallesProcessor(
                                 multipleFields != null -> "instructor.${multipleFields.name}()"
 
                                 //BindViewHolder
-                                with(viewHolderAutoBinder) {
-                                    this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$prefix${payName}"
-                                } -> {
+                                viewHolderBinders["$prefix${payName}"] == payloading.isNullable -> {
                                     "viewHolder?.$prefix${payName}(payload.new${payName})"
                                 }
 
@@ -445,27 +448,10 @@ class NovallesProcessor(
                     incrementLevel()
                     cachedFields.mapNotNull { payloading ->
                         val payName = payloading.name.capitalizeFirst()
-                        val modelFieldName = payloading.variableName ?: payloading.name
+                        val modelFieldName = payloading.name
 
-                        val inspectorFunc = inspectorFunctions.find {
-                            it.arg.capitalizeFirst() == payName
-                        }
-                        val multipleFields = inspectorMultipleValues.find {
-                            it.target.capitalizeFirst() == payName
-                        }
-
-                        val viewHolderBaseBindCondition = { function: KSFunctionDeclaration ->
-                            function.simpleName.getShortName() == "$bindPrefix${payName}" && function.parameters.size == 1
-                        }
-
-                        val viewHolderPostBindCondition = { function: KSFunctionDeclaration ->
-                            function.simpleName.getShortName() == "$prefix${payName}" && function.parameters.size == 1
-                        }
-
-                        val viewHolderBaseAutoBinder =
-                            viewHolderFun.find(viewHolderBaseBindCondition)
-                        val viewHolderDefaultBinder =
-                            viewHolderFun.find(viewHolderPostBindCondition)
+                        val inspectorFunc = inspectorFunctionsByField[payName]
+                        val multipleFields = inspectorMultipleByField[payName]
 
                         when {
 
@@ -481,16 +467,12 @@ class NovallesProcessor(
                             multipleFields != null -> "instructor.${multipleFields.name}()"
 
                             //BindViewHolder (binder)
-                            with(viewHolderBaseAutoBinder) {
-                                this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$bindPrefix${payName}"
-                            } -> {
+                            viewHolderBinders["$bindPrefix${payName}"] == payloading.isNullable -> {
                                 "viewHolder.$bindPrefix${payName}(model.${modelFieldName})"
                             }
 
                             //BindViewHolder
-                            with(viewHolderDefaultBinder) {
-                                this != null && isFirstArgNullable() == payloading.isNullable && simpleName.getShortName() == "$prefix${payName}"
-                            } -> {
+                            viewHolderBinders["$prefix${payName}"] == payloading.isNullable -> {
                                 "viewHolder.$prefix${payName}(model.${modelFieldName})"
                             }
 
@@ -516,24 +498,21 @@ class NovallesProcessor(
         }
 
         private fun extractViewHolderAnnotations(classDeclaration: KSClassDeclaration): Triple<KSClassDeclaration, String, String> {
-            return when {
-                classDeclaration.hasAnnotation(BindViewHolder::class) -> {
-                    val annotation =
-                        classDeclaration.findAnnotation(BindViewHolder::class)
-                            ?: errorHandler.throwUnexpectedError(classDeclaration)
+            return when (val annotation = classDeclaration.findAnnotation(BindViewHolder::class)) {
+                null -> {
+                    errorHandler.logError(
+                        classDeclaration,
+                        "This class should be annotated with BindViewHolder annotation."
+                    )
+                }
+
+                else -> {
                     val viewHolder =
                         (annotation.arguments.retrieveArg<KSType>("viewHolder")).declaration.closestClassDeclaration()
                             ?: errorHandler.throwUnexpectedError(classDeclaration)
                     val prefix = annotation.arguments.retrieveArg<String>("prefix")
                     val postfix = annotation.arguments.retrieveArg<String>("bindPrefix")
                     Triple(viewHolder, prefix, postfix)
-                }
-
-                else -> {
-                    errorHandler.logError(
-                        classDeclaration,
-                        "This class should be annotated with BindViewHolder annotation."
-                    )
                 }
             }
         }
@@ -551,99 +530,53 @@ class NovallesProcessor(
 
             val constructor = classDeclaration.primaryConstructor ?: return
 
-            val key = constructor.parameters.firstOrNull { parameter ->
-                parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.PrimaryTag.name } != null
-            } ?: classDeclaration.primaryConstructor?.parameters?.first() ?: return
-
-            val notUI = constructor.parameters.filter { parameter ->
-                parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.NonUIProperty.name } != null
-            }
-
-            val decomposedFields = constructor.parameters.filter { parameter ->
-                parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.Decompose.name } != null
-            }
-
-            decomposedFields.forEach {
-                errorHandler.checkDecomposedValue(classDeclaration, it)
-            }
-
-            val decomposedFieldsValues =
-                decomposedFields.mapNotNull {
-                    val resolvedType = it.type.resolve()
-                    val ob =
-                        resolvedType.declaration.closestClassDeclaration() ?: return@mapNotNull null
-                    DecomposedEncapsulation(
-                        clazz = ob,
-                        fieldName = it.name?.getShortName() ?: return@mapNotNull null,
-                        params = ob.primaryConstructor?.parameters?.filterNot { parameter ->
-                            parameter.annotations.find { annotation ->
-                                annotation.shortName.getShortName() == KUIAnnotations.NonUIProperty.name
-                            } != null
-                        } ?: emptyList(),
-                        nullable = resolvedType.isMarkedNullable
-                    )
+            //Single pass over the parameters: each annotation sequence is walked once.
+            var primaryTag: KSValueParameter? = null
+            val notUI = HashSet<KSValueParameter>()
+            constructor.parameters.forEach { parameter ->
+                parameter.annotations.forEach { annotation ->
+                    when (annotation.shortName.getShortName()) {
+                        KUIAnnotations.PrimaryTag.name -> if (primaryTag == null) primaryTag = parameter
+                        KUIAnnotations.NonUIProperty.name -> notUI.add(parameter)
+                    }
                 }
+            }
 
-            val fields = constructor.parameters.toList().filterNot { it == key }
-                .filterNot { it in notUI || it in decomposedFields }
+            val key = primaryTag ?: constructor.parameters.firstOrNull() ?: return
+
+            val fields = constructor.parameters.filterNot { it == key || it in notUI }
             val name = classDeclaration.simpleName.getShortName()
             val import = classDeclaration.qualifiedName?.asString()
             val payloadsBaseInterface = "BasePayload"
+
+            //Resolve each field type once; both the payload list and the imports need it.
+            val resolvedFields = fields.map { it to it.type.resolve() }
 
             val payList = mutableListOf<Payloading>()
             val cachedFields = mutableListOf<CachedField>()
             payloadsMap[name] = payList
             cachedFieldsMap[name] = cachedFields
             payList.addAll(
-                fields.map {
-                    val typeResolved = it.type.resolve()
+                resolvedFields.map { (parameter, typeResolved) ->
                     cachedFields.add(
                         CachedField(
-                            it.toString(),
+                            parameter.toString(),
                             typeResolved.isMarkedNullable
                         )
                     )
                     Payloading(
-                        "${it.toString().capitalizeFirst()}Changed",
+                        "${parameter.toString().capitalizeFirst()}Changed",
                         typeResolved.isMarkedNullable
                     )
                 }
             )
-            decomposedFieldsValues.forEach { parent ->
-                payList.addAll(
-                    parent.params.map {
-                        val typeResolved = it.type.resolve()
-
-                        cachedFields.add(
-                            CachedField(
-                                "${
-                                    it.toString().capitalizeFirst()
-                                }In${parent.fieldName.capitalizeFirst()}",
-                                parent.nullable || typeResolved.isMarkedNullable,
-                                "${parent.fieldName}.$it"
-                            )
-                        )
-
-                        Payloading(
-                            "${
-                                it.toString().capitalizeFirst()
-                            }In${parent.fieldName.capitalizeFirst()}Changed",
-                            parent.nullable || typeResolved.isMarkedNullable
-                        )
-                    }
-                )
-            }
-
             val fileText = buildString {
                 add("package $PACKAGE")
                 newLine()
 
                 val importsMap = mutableMapOf<String, String>()
-                fields.forEach { parameter ->
+                resolvedFields.forEach { (parameter, paramType) ->
                     if (!parameter.type.element.isPrimitive()) {
-
-                        val paramType = parameter.type.resolve()
-
                         val clazz = paramType.declaration.qualifiedName?.asString()
                             ?: return@forEach
                         importsMap[paramType.declaration.qualifiedName?.getShortName()
@@ -660,30 +593,6 @@ class NovallesProcessor(
                         }
                     }
                 }
-                decomposedFieldsValues.forEach Decomposed@{ decomposedValue ->
-                    decomposedValue.params.forEach { parameter ->
-                        if (!parameter.type.element.isPrimitive()) {
-                            val paramType = parameter.type.resolve()
-                            val clazz =
-                                paramType.declaration.qualifiedName?.asString() ?: return@forEach
-                            importsMap[paramType.declaration.qualifiedName?.getShortName()
-                                ?: return@forEach] = clazz
-                        }
-
-                        parameter.type.element?.typeArguments?.forEach Typed@{
-                            if (!it.type.isPrimitive()) {
-                                val elementResolved = it.type?.resolve()
-
-                                val nameClass =
-                                    elementResolved?.declaration?.qualifiedName?.asString()
-                                        ?: return@Typed
-                                importsMap[elementResolved.declaration.qualifiedName?.getShortName()
-                                    ?: return@Typed] = nameClass
-                            }
-                        }
-                    }
-                }
-
                 val catalogueIndexName = classDeclaration.qualifiedName!!.asString()
                 val catalogueValueName = PACKAGE + ".${name}UIHelper()"
 
@@ -725,15 +634,7 @@ class NovallesProcessor(
                     )
                     appendUp("return newItem is $name")
 
-                    val comparisons = fields.map { "oldItem.$it == newItem.$it\n" }.plus(
-                        decomposedFieldsValues.map { parent ->
-                            parent.params.joinToString(
-                                separator = "${tabs}&& "
-                            ) {
-                                "oldItem.${parent.fieldName}${parent.dot}$it == newItem.${parent.fieldName}${parent.dot}$it\n"
-                            }
-                        }
-                    )
+                    val comparisons = fields.map { "oldItem.$it == newItem.$it\n" }
 
                     if (comparisons.isNotEmpty()) {
                         append(
@@ -756,7 +657,7 @@ class NovallesProcessor(
                             args = listOf("oldItem: $name", "newItem: Any")
                         )
                     )
-                    if (fields.isNotEmpty() || decomposedFields.isNotEmpty()) {
+                    if (fields.isNotEmpty()) {
                         appendUp("return mutableListOf<$payloadsBaseInterface>().apply {")
                         appendUp("if (newItem is $name) {")
                         incrementLevel()
@@ -768,17 +669,6 @@ class NovallesProcessor(
                                 }Changed(newItem.$it))"
                             )
                             appendDown("}")
-                        }
-                        decomposedFieldsValues.forEach { parent ->
-                            parent.params.forEach {
-                                appendIn(" if (newItem.${parent.fieldName}${parent.dot}$it != oldItem.${parent.fieldName}${parent.dot}$it) {")
-                                appendUp(
-                                    "add($payloadsName.${
-                                        it.toString().capitalizeFirst()
-                                    }In${parent.fieldName.capitalizeFirst()}Changed(newItem.${parent.fieldName}${parent.dot}$it))"
-                                )
-                                appendDown("}")
-                            }
                         }
                     } else {
                         appendUp("return mutableListOf()")
@@ -802,7 +692,7 @@ class NovallesProcessor(
                 }
                 newLine(2)
 
-                if (fields.isNotEmpty() || decomposedFields.isNotEmpty()) {
+                if (fields.isNotEmpty()) {
                     buildIn {
                         val header = "sealed class $payloadsName : $payloadsBaseInterface {"
                         appendIn(header)
@@ -815,25 +705,6 @@ class NovallesProcessor(
                                     "new${it.toString().capitalizeFirst()}: ${it.writeAsVariable()}"
                                 )
                             )
-                        }
-                        decomposedFieldsValues.forEach { parent ->
-                            parent.params.forEach {
-                                appendIn(
-                                    dataClassConstructor(
-                                        name = "${
-                                            it.toString().capitalizeFirst()
-                                        }In${parent.fieldName.capitalizeFirst()}Changed",
-                                        parent = "${name}Payloads()",
-                                        "new${
-                                            it.toString().capitalizeFirst()
-                                        }In${parent.fieldName.capitalizeFirst()}: ${
-                                            it.writeAsVariable(
-                                                parent
-                                            )
-                                        }"
-                                    )
-                                )
-                            }
                         }
                         appendDown("}")
                     }
@@ -850,26 +721,6 @@ class NovallesProcessor(
 
             file.write(fileText.toByteArray())
 
-        }
-    }
-
-    private fun getModuleName(symbols: Sequence<KSAnnotated>): String? {
-        return symbols.hashCode().toString()
-    }
-
-    private fun getModulePath(symbols: Sequence<KSAnnotated>): String? {
-        return tryNull {
-            val initial = (symbols.first {
-                it is KSClassDeclaration && it.containingFile?.filePath?.contains("src") == true
-            } as KSClassDeclaration).containingFile?.filePath?.split("/") ?: return null
-            logger.warn(initial.toString())
-            if (initial.contains("src")) {
-                val path = initial.subList(0, initial.indexOf("src") - 1)
-                    .joinToString("/") + "/app/novalles-tmp"
-                path
-            } else {
-                null
-            }
         }
     }
 

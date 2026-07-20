@@ -16,7 +16,6 @@
 data class PictureUIModel(
     @PrimaryTag val tag: String,
     val image: Int,
-    val line: ColorPair,
     @NonUIProperty val imageCode: String,
     val title: String,
     val desc: String,
@@ -31,7 +30,7 @@ data class PictureUIModel(
    **provideUiInterfaceForAs** functions.
 
 ````kotlin
-private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(MainCatalogue::class, PictureUIModel::class)
+private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(PictureUIModel::class)
 //or
 private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceFor(PictureUIModel::class)
 //or another variant listed above
@@ -219,51 +218,6 @@ data class PictureUIModel(
 }
 ````
 
-### Decompose annotations (Deprecated)
-#### Decompose annotation is deprecated and will be removed later. Consider replacement of decomposed value with separate fields in your UI model.
-
-Value, annotated with **Decompose** will be decomposed with its own values. For example, if your field have 2
-properties, they will be used in any Novalles' actions separately:
-Novalles will generate 2 different payloads objects in _UIModelHelper.**changePayloads**_, compare them in _UIModelHelper.**areContentsTheSame**_ separately.
-
-Also, if you use **BindViewHolder**, you should use _{prefix}${FieldName}In${DecomposedFieldName}()_ functions in
-your viewHolder for each field of your decomposed value.
-
-````kotlin
-data class ColorPair(
-    val left: Int,
-    val right: Int
-)
-
-@UIModel
-data class PictureUIModel(
-    @PrimaryTag val tag: String,
-    //...
-    @Decompose val line: ColorPair,
-    //...
-) : BaseUiModel {
-
-//...
-
-    inner class PictureViewHolder(private val binding: ItemPictureBinding) : ViewHolder(binding.root) {
-
-        //...
-
-        //This function will be called, if left in line value changes.
-        fun setLeftInLine(color: Int) {
-            binding.colour.animateColors(color)
-        }
-
-        //This function will be called, if right in line value changes.
-        fun setRightInLine(color: Int) {
-            binding.colourSecond.animateColors(color)
-        }
-
-        //...
-    }
-}
-````
-
 ### Manual notifying
 You can manually notify your adapter with **BindOnTag** usage.
 1. Create some sealed class or other instance that has its own class.
@@ -311,7 +265,6 @@ fun setImage(image: Int) {
   of functions usage.
 * Novalles does not require any proguard rules and should work normally in release builds if your Ui Models and adapters
   work normally.
-* Decompose annotation should be used careful, because it is very lightly tested.
 * Please, report any issues you've encountered. **Novalles is still in development**, so your feedback is very helpful.
 
 ## How to integrate in your project

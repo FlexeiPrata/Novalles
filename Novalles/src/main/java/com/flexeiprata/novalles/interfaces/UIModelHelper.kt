@@ -6,7 +6,6 @@ import com.flexeiprata.novalles.annotations.*
  * Call [areContentsTheSame] and [areItemsTheSame] in corresponding Diff Util's functions. Call either [changePayloads] or [changePayloadsMap] in the changePayloads function.
  *
  * @see [PrimaryTag]
- * @see [Decompose]
  * @see [NonUIProperty]
  */
 interface UIModelHelper <in T> {

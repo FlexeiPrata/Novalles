@@ -8,9 +8,7 @@ internal class KspUIModelsProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
         return NovallesProcessor(
             environment.codeGenerator,
-            environment.logger,
-            environment.options
+            environment.logger
         )
     }
 }
-

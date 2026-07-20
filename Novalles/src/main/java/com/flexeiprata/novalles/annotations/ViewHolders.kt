@@ -41,8 +41,6 @@ annotation class BindOnFields(val on: Array<String>)
  * The default [prefix] is "set".
  * The default [bindPrefix] is "bind".
  * You'll get warnings during ksp generating, if there will be no corresponding functions in [Instructor] and your [viewHolder].
- *
- * @see [Decompose]
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)

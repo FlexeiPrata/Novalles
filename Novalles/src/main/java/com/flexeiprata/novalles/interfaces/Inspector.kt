@@ -32,7 +32,6 @@ interface Inspector <I: Instructor, V: Any, M: Any> {
      *
      * @see [BindViewHolder]
      * @see [Novalles.provideInspectorFromInstructor]
-     * @see [Decompose]
      */
     fun inspectPayloads(payloads: Any?, instructor: I, viewHolder: V? = null, doOnBind: () -> Unit)
 

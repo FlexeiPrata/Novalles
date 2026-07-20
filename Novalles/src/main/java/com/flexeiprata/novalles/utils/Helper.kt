@@ -1,17 +1,5 @@
 package com.flexeiprata.novalles.utils
 
-import com.google.devtools.ksp.symbol.KSClassDeclaration
-import com.google.devtools.ksp.symbol.KSValueParameter
-
-internal data class DecomposedEncapsulation(
-    val clazz: KSClassDeclaration,
-    val fieldName: String,
-    val params: List<KSValueParameter>,
-    val nullable: Boolean
-) {
-    val dot get() = if (nullable) "?." else "."
-}
-
 internal data class Payloading(
     val name: String,
     val isNullable: Boolean
@@ -19,8 +7,7 @@ internal data class Payloading(
 
 internal data class CachedField(
     val name: String,
-    val isNullable: Boolean,
-    val variableName: String? = null,
+    val isNullable: Boolean
 )
 
 internal data class InspectorFunData(

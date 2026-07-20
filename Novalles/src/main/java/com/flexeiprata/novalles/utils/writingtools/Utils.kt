@@ -1,32 +1,28 @@
 package com.flexeiprata.novalles.utils.writingtools
 
-import com.flexeiprata.novalles.utils.DecomposedEncapsulation
 import com.google.devtools.ksp.symbol.*
-import com.google.devtools.ksp.validate
 import kotlin.reflect.KClass
 
-internal fun KSValueParameter.writeAsVariable(parent: DecomposedEncapsulation? = null): String {
+internal fun KSValueParameter.writeAsVariable(): String {
     val resolved = type.resolve()
     val name = resolved.declaration.simpleName.getShortName()
     val args = type.element?.typeArguments?.toTypeString().orEmpty()
-    val nullable = if (resolved.isMarkedNullable || parent?.nullable == true) "?" else ""
+    val nullable = if (resolved.isMarkedNullable) "?" else ""
     return "$name$args$nullable"
 }
 
-internal inline fun <T> Sequence<T>.findOut(predicate: (T) -> Boolean): Boolean {
-    return this.find(predicate) != null
+/**
+ * Indexes [this] by [keyOf], keeping the FIRST element on duplicate keys.
+ * This mirrors `find { }`, which associateBy does not — it keeps the last.
+ */
+internal inline fun <T, K> Iterable<T>.firstWinsBy(keyOf: (T) -> K): Map<K, T> {
+    val result = LinkedHashMap<K, T>()
+    for (element in this) result.putIfAbsent(keyOf(element), element)
+    return result
 }
 
 internal fun KSDeclaration.findAnnotation(annotation: KClass<*>): KSAnnotation? {
     return annotations.find { it.shortName.getShortName() == annotation.simpleName }
-}
-
-internal fun KSDeclaration.hasAnnotation(annotation: KClass<*>): Boolean {
-    return annotations.find { it.shortName.getShortName() == annotation.simpleName } != null
-}
-
-internal fun String.appendIf(condition: Boolean, text: String): String {
-    return if (condition) "$this$text" else this
 }
 
 internal fun KSFunctionDeclaration.isFirstArgNullable(): Boolean {
@@ -56,8 +52,9 @@ internal fun List<KSTypeArgument>.toTypeString(): String {
                 prefix = "<",
                 postfix = ">",
                 separator = ", "
-            ) {
-                val resolved = it.type!!.resolve()
+            ) { argument ->
+                //A star projection has no type, f.e. List<*>.
+                val resolved = argument.type?.resolve() ?: return@joinToString "*"
                 resolved.declaration.simpleName.getShortName() + if (resolved.isMarkedNullable) "?" else ""
             }
         }

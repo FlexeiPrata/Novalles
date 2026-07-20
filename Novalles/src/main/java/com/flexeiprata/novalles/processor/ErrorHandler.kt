@@ -1,11 +1,7 @@
 package com.flexeiprata.novalles.processor
 
 import com.flexeiprata.novalles.annotations.BindViewHolder
-import com.flexeiprata.novalles.utils.KUIAnnotations
-import com.flexeiprata.novalles.utils.isPrimitive
 import com.flexeiprata.novalles.utils.writingtools.findAnnotation
-import com.flexeiprata.novalles.utils.writingtools.findOut
-import com.google.devtools.ksp.closestClassDeclaration
 import com.google.devtools.ksp.isAbstract
 import com.google.devtools.ksp.isInternal
 import com.google.devtools.ksp.isPublic
@@ -13,7 +9,6 @@ import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSType
-import com.google.devtools.ksp.symbol.KSValueParameter
 
 internal class ErrorHandler(private val logger: KSPLogger) {
 
@@ -28,13 +23,10 @@ internal class ErrorHandler(private val logger: KSPLogger) {
             declaration.primaryConstructor?.parameters?.find { it.isVararg || !it.type.resolve().declaration.isPublic() } != null -> Error.Critical(
                 "Some of class' parameters are not compatible with Novalles or are not public."
             )
-            hasDecomposedPrimitives(declaration) -> Error.Critical(
-                "Decomposed value should not be primitive."
-            )
             else -> Error.Clear
         }
 
-        log(declaration, error, Error.Warnings(emptyList()))
+        log(declaration, error)
 
     }
 
@@ -50,32 +42,7 @@ internal class ErrorHandler(private val logger: KSPLogger) {
         }
 
         //Avoid to check if [Instructor] is super class to reduce generating time.
-        val warnings = Error.Clear
-
-        log(declaration, error, warnings)
-    }
-
-    fun checkDecomposedValue(node: KSClassDeclaration, decompose: KSValueParameter) {
-        val clazz = decompose.type.resolve().declaration.closestClassDeclaration()
-        val error = when {
-            clazz == null -> Error.Critical(
-                "Unexpected error during finding class declaration"
-            )
-            !clazz.isPublic() || clazz.isInternal() -> Error.Critical(
-                "The decomposed value is not valid."
-            )
-            clazz.getAllProperties().findOut { !it.isPublic() } -> Error.Critical(
-                "The decomposed value should be data class with public fields"
-            )
-            decompose.type.element.isPrimitive() -> Error.Critical(
-                "Decomposed value should not be primitive"
-            )
-            else -> Error.Clear
-        }
-
-        val warnings = Error.Clear
-
-        log(node, error, warnings)
+        log(declaration, error)
     }
 
     fun throwUnexpectedError(from: KSClassDeclaration): Nothing {
@@ -96,11 +63,6 @@ internal class ErrorHandler(private val logger: KSPLogger) {
                     logger.error(it.message, node)
                     throw it.throwIt()
                 }
-                is Error.Warnings -> {
-                    it.messages.forEach { message ->
-                        logger.warn(message, node)
-                    }
-                }
             }
         }
     }
@@ -111,14 +73,7 @@ internal class ErrorHandler(private val logger: KSPLogger) {
         } ?: false
     }
 
-    private fun hasDecomposedPrimitives(declaration: KSClassDeclaration): Boolean {
-        return declaration.primaryConstructor?.parameters?.find { parameter ->
-            parameter.annotations.find { it.shortName.getShortName() == KUIAnnotations.Decompose.name } != null && parameter.type.isPrimitive()
-        } != null
-    }
-
     private sealed class Error {
-        data class Warnings(val messages: List<String>) : Error()
         data class Critical(val message: String) : Error() {
             fun throwIt() = RuntimeException(message)
         }
@@ -127,6 +82,5 @@ internal class ErrorHandler(private val logger: KSPLogger) {
     }
 
     fun Boolean?.not() = this == false
-    fun Boolean?.assure() = this == true
 
 }

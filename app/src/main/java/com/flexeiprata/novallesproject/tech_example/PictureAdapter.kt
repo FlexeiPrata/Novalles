@@ -90,14 +90,6 @@ class PictureAdapter(private val onClick: (PictureUIModel) -> Unit) :
             binding.image.setBackgroundColor(image)
         }
 
-        fun bindLeftInLine(color: Int) {
-            binding.colour.setBackgroundColor(color)
-        }
-
-        fun bindRightInLine(color: Int) {
-            binding.colourSecond.setBackgroundColor(color)
-        }
-
         fun setTitle(title: String) {
             binding.title.text = HtmlCompat.fromHtml(title, HtmlCompat.FROM_HTML_MODE_LEGACY)
         }

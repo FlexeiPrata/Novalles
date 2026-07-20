@@ -189,8 +189,6 @@ object Novalles {
         }
     }
 
-    private val KClass<*>.name get() = simpleName ?: ""
-
     private enum class ProviderOptions {
         UIModelInterface, InspectorOfPayloadsIndirect, InspectorOfPayloadsDirect
     }

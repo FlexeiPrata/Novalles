@@ -27,18 +27,6 @@ internal class StringBuilderTabulator(private val builder: StringBuilder) {
         builder.add(text)
     }
 
-    fun configurableAppend(
-        text: String,
-        isTabulation: Boolean,
-        levelChange: Int = 0,
-        isEOL: Boolean = true
-    ) {
-        level += levelChange
-        if (isTabulation) tabulation()
-        builder.append(text)
-        if (isEOL) builder.append("\n")
-    }
-
     fun closeFunctions(minLevel: Int = 0) {
         while (level > minLevel) {
             appendDown("}")
