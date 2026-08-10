@@ -1,6 +1,6 @@
 # Novalles 
 
-*Library to simplify and speed up the creation and work with adapters with payload.*
+*A library to simplify and speed up building RecyclerView adapters that work with payloads.*
 
 [![License](https://img.shields.io/badge/License%20-Apache%202-337ab7.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![](https://jitpack.io/v/FlexeiPrata/Novalles.svg)](https://jitpack.io/#FlexeiPrata/Novalles)
@@ -9,7 +9,7 @@
 
 ## How to use
 
-1. Annotate your UI model with **UIModel** Annotation.
+1. Annotate your UI model with the **UIModel** annotation.
 
 ````kotlin
 @UIModel
@@ -23,11 +23,11 @@ data class PictureUIModel(
 ) : BaseUiModel
 ````
 
-* You can use **PrimaryTag** annotation to define property to be used in are items the same comparison.
-* Use **NonUIProperty** annotation to define property that will not be used in any comparisons.
+* Use the **PrimaryTag** annotation to mark the property used in the `areItemsTheSame` comparison.
+* Use the **NonUIProperty** annotation to mark a property that should be left out of every comparison.
 
-2. Pass an instance of **_UIModelHelper_** in your DiffUtil using **provideUiInterfaceForAsFromCatalogue**, **provideUiInterfaceFor** or
-   **provideUiInterfaceForAs** functions.
+2. Create a **_UIModelHelper_** for your DiffUtil with one of **provideUiInterfaceForAsFromCatalogue**, **provideUiInterfaceFor** or
+   **provideUiInterfaceForAs**.
 
 ````kotlin
 private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterfaceForAsFromCatalogue(PictureUIModel::class)
@@ -36,8 +36,8 @@ private val uiModelHelper: UIModelHelper<BaseUiModel> = Novalles.provideUiInterf
 //or another variant listed above
 ````
 
-**Note**: To enable catalogue feature, you should create a single main catalogue class/object annotated with **NovallesCatalogue**. For large projects, you can organize your models into separate **NovallesPage** classes and reference them in the main catalogue. **This feature is experimental** and may be changed in future.
-Catalogue feature works faster because it avoids reflection and calls constructors directly.
+**Note**: To enable the catalogue feature, create a single main catalogue class or object annotated with **NovallesCatalogue**. For large projects, you can split your models across separate **NovallesPage** classes and reference them from the main catalogue.
+The catalogue is faster because it avoids reflection and calls the generated constructors directly, and it is the recommended way to provide Novalles instances.
 
 ````kotlin
 //Simple catalogue - all models in one place
@@ -60,7 +60,7 @@ object PicturesPage
 object UsersPage
 ````
 
-3. Call relevant functions of _UIModelHelper_ in your DiffUtil. This example uses diffUtil based on common interface.
+3. Call the matching _UIModelHelper_ functions in your DiffUtil. This example uses a DiffUtil built on a common interface.
 
 ````kotlin
 class DefaultDiffUtil<T : BaseUiModel>(uiModel: KClass<T>) : DiffUtil.ItemCallback<BaseUiModel>() {
@@ -81,12 +81,12 @@ class DefaultDiffUtil<T : BaseUiModel>(uiModel: KClass<T>) : DiffUtil.ItemCallba
 }
 ````
 
-4. Create a class, that extends **Instructor** interface. Annotate it with **Instruction** annotation, pass your _UI
-   Model_ class as the annotation argument. You can also annotate it with **BindViewHolder** _(See corresponding
-   section for more details)_. In this class you should create functions, that will be called on a value change. 
-Use **BindOn** annotation to tell Novalles which function should be called when a value has been changed, value name should
-   be passed as the first annotation argument. By default, bound function will be called both in _bind_ and _payloads_ flows.
-If you want to differ them, you can add a **boolean argument** in this function. **True** stands for bind call, **False** for payloads call.
+4. Create a class that implements the **Instructor** interface. Annotate it with **Instruction** and pass your _UI
+   Model_ class as the annotation argument. You can also annotate it with **BindViewHolder** _(see the corresponding
+   section for details)_. Inside this class, create the functions that should run when a value changes.
+Use the **BindOn** annotation to tell Novalles which function to call when a given value changes — pass the value name
+   as the first annotation argument. By default, a bound function is called in both the _bind_ and _payloads_ flows.
+If you want to tell them apart, add a **boolean argument** to the function: **true** means it was called from bind, **false** from payloads.
 
 ````kotlin
 @Instruction(PictureUIModel::class)
@@ -96,15 +96,15 @@ inner class PictureInstructor(
     private val uiModel: PictureUIModel
 ) : Instructor {
 
-    //This function will be called, when title changes.
+    //This function is called when the title changes.
     @BindOn("title")
     fun setTitleComplex() {
         val realDesc = "<b>${uiModel.title}</b> (${uiModel.tag})"
         viewHolder.setTitle(realDesc)
     }
 
-    //This function will be called when image changes. It will be called with "true" if it is called from bind,
-    //And with "false" if called from payloads.
+    //This function is called when the image changes. It receives "true" when called from bind,
+    //and "false" when called from payloads.
     @BindOn("image")
     fun bindTestImage(isFromBind: Boolean) {
         if (isFromBind) {
@@ -121,7 +121,7 @@ inner class PictureInstructor(
 You can bind more than one field at once:
 ````kotlin
 
-//This function will be called, when title or count changed.
+//This function is called when the title or the count changes.
 @BindOnFields(["title", "count"])
 fun setTitleAndCount() {
     val realDesc = "<b>${uiModel.title}</b> (${uiModel.count})"
@@ -138,8 +138,8 @@ If you completely rely on **BindViewHolder**, you can create the simplest Instru
 inner class AutoInstructor : Instructor
 ````
 
-5. Create an instance of the **Inspector** class using provide functions. Note that provide function other than catalogue one use reflection,
-So you should be careful when use it.
+5. Create an **Inspector** with one of the provide functions. Note that every provide function except the catalogue one uses reflection,
+so use them with care.
 
 ````kotlin
 private val inspector = Novalles.provideInspectorFromUiModel<PictureUIModel>()
@@ -149,10 +149,10 @@ private val inspector = Novalles.provideInspectorFromModelCatalogue(PictureUIMod
 private val inspector = Novalles.provideInspectorFromInstructorCatalogue(PictureInstructor::class)
 ````
 
-6. Invoke _Inspector.**inspectPayloads**_ with 4 arguments: your payload,
-   instructor, your viewHolder and lambda for action when payload is empty. This function calls corresponding functions in your viewHolder and instructor based
-   on gathered payload.
-7. You can call **bind** function of your inspector to call all functions bound to fields in your viewHolder or instructor.
+6. Invoke _Inspector.**inspectPayloads**_ with four arguments: your payload,
+   the instructor, your viewHolder, and a lambda that runs when the payload is empty. Based on the collected payload, it calls
+   the matching functions in your viewHolder and instructor.
+7. You can call the inspector's **bind** function to run every function bound to a field in your viewHolder or instructor.
 
 ````kotlin
 override fun onBindViewHolder(
@@ -174,12 +174,12 @@ override fun onBindViewHolder(
 
 ### BindViewHolder
 
-Class annotated with it is considered to be the instruction how to handle payloads for UI Model. It should also
-implement **Instructor** interface. Your functions should be names as _{prefix}{PropertyName}_.
-The default prefix is **set**. By default, bound function will be called both in _bind_ and _payloads_ flows.
-The default bindPrefix is **bind**.
-You'll get warnings during ksp generating, if there will be no corresponding functions in [Instructor] and your [viewHolder].
-If you want to differ them, you can change prefix: **bind** stands for bind call, **set _(or other configured)_** for payloads call.
+A class annotated with it is treated as the instruction for how to handle a UI Model's payloads. It should also
+implement the **Instructor** interface. Name your functions as _{prefix}{PropertyName}_.
+The default prefix is **set**, and the default bindPrefix is **bind**. By default, a bound function is called in both
+the _bind_ and _payloads_ flows.
+You'll get warnings during KSP generation if the matching functions are missing from the Instructor and your viewHolder.
+To tell the two flows apart, use the prefixes: **bind** for the bind call, and **set** _(or whatever you configured)_ for the payloads call.
 
 ````kotlin
 @UIModel
@@ -198,17 +198,17 @@ data class PictureUIModel(
 
         //...
 
-        //This function will be called, if desc changes.
+        //This function is called when desc changes.
         fun setDesc(desc: String) {
             binding.desc.text = desc
         }
 
-        //This function will be called on bind.
+        //This function is called on bind.
         fun bindImage(image: String) {
             binding.image.load("image")
         }
 
-        //This function will be called, if image changes.
+        //This function is called when image changes.
         fun setImage(image: String) {
             binding.image.loadAnimated("image")
         }
@@ -219,14 +219,14 @@ data class PictureUIModel(
 ````
 
 ### Manual notifying
-You can manually notify your adapter with **BindOnTag** usage.
-1. Create some sealed class or other instance that has its own class.
+You can notify your adapter manually using **BindOnTag**.
+1. Create a tag: a sealed class, or any object that has its own type.
 ````kotlin
 sealed interface Tags {
     object SetNullLikes
 }
 ````
-2. Register this tag in your **Instructor** with **BindOnTag**
+2. Register this tag in your **Instructor** with **BindOnTag**.
 ````kotlin
 @Instruction(PictureUIModel::class)
 @BindViewHolder(PictureViewHolder::class)
@@ -244,13 +244,13 @@ inner class PictureInstructor(
 
 }
 ````
-3. Call necessary function and pass this tag as a Payload.
+3. Call the relevant notify function and pass this tag as the payload.
 ````kotlin
 novallesAdapter.notifyItemRangeChanged(0, novallesAdapter.itemCount, Tags.SetNullLikes)
 ````
-### Conclusions and usage
+### Tips and notes
 
-* To maximize benefit of the Novalles, you can animate your views inside your set functions in a viewHolder.
+* To get the most out of Novalles, animate your views inside the set functions in your viewHolder.
 
 ````kotlin
 fun setImage(image: Int) {
@@ -258,29 +258,28 @@ fun setImage(image: Int) {
 }
 ````
 
-* Do not create any Novalles instances in functions, better to create an instance of UiModelHelper in your DiffUtil and
-  an instance of Inspector in your adapter.
-* Novalles does not use android components directly, so it does not have any SDK restrictions. This can be changed in
-  the future, because Novalles uses _Any_ instead of _ViewHolder_ in its interfaces. This may lead to misunderstandings
-  of functions usage.
-* Novalles does not require any proguard rules and should work normally in release builds if your Ui Models and adapters
-  work normally.
-* Please, report any issues you've encountered. **Novalles is still in development**, so your feedback is very helpful.
+* Don't create Novalles instances inside functions. Instead, create the UIModelHelper in your DiffUtil and
+  the Inspector in your adapter.
+* Novalles doesn't use Android components directly, so it has no SDK restrictions. That may change in the future;
+  for now its interfaces use _Any_ instead of _ViewHolder_, which can make their usage a little less obvious.
+* Novalles doesn't require any ProGuard rules and should work fine in release builds, as long as your UI Models and
+  adapters do.
+* Please report any issues you run into. **Novalles is still in active development**, so your feedback really helps.
 
-## How to integrate in your project
+## How to integrate into your project
 
-1. Add KSP dependencies in your top level gradle file.
+1. Add the KSP dependency to your top-level Gradle file.
 
 ````groovy
 buildscript {
     dependencies {
-        //You can use other Kotlin version.
+        //You can use a different Kotlin version.
         classpath("com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:${version}")
     }
 }
 ````
 
-2. Add KSP plugin in your app level gradle file.
+2. Add the KSP plugin to your app-level Gradle file.
 
 ````groovy
 plugins {
@@ -291,7 +290,7 @@ plugins {
 }
 ````
 
-3. Import the Novalles library as dependency.
+3. Add the Novalles library as a dependency.
 
 ````groovy
 allprojects {
@@ -310,6 +309,22 @@ dependencies {
 }
 
 ````
+
+### Troubleshooting: incremental builds
+
+Novalles declares precise KSP dependencies for each generated file, so an edit only
+regenerates what it actually affects. If you ever suspect a generated file is stale or
+incomplete, you can turn that off:
+
+````groovy
+ksp {
+    arg("novalles.safeDependencies", "true")
+}
+````
+
+This associates every generated file with every source file, which **disables incremental
+processing** and makes each build reprocess everything. It is a diagnostic switch, not a
+setting to leave on — and please report the issue if you need it.
 
 ## License
 

@@ -57,3 +57,10 @@ class GenericStubViewHolder(private val binding: ItemPictureBinding) :
 
     fun setNote(note: String?) = Unit
 }
+
+//UIModel with no Instruction: the catalogue page must not reference a never-generated Inspector.
+@UIModel
+data class HelperOnlyStubModel(
+    @PrimaryTag val id: String,
+    val label: String
+)

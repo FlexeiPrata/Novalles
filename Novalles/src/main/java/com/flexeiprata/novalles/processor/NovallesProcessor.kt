@@ -37,6 +37,7 @@ import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.KSVisitorVoid
@@ -44,12 +45,28 @@ import com.google.devtools.ksp.validate
 
 class NovallesProcessor(
     private val codeGenerator: CodeGenerator,
-    private val logger: KSPLogger
+    private val logger: KSPLogger,
+    private val options: Map<String, String> = emptyMap()
 ) : SymbolProcessor {
 
     private val payloadsMap = mutableMapOf<String, MutableList<Payloading>>()
     private val cachedFieldsMap = mutableMapOf<String, MutableList<CachedField>>()
     private val catalogUIModels = mutableMapOf<String, String>()
+    private val catalogUIModelFiles = mutableSetOf<KSFile>()
+    private val catalogInspectors = mutableMapOf<String, String>()
+    private val catalogInspectorFiles = mutableSetOf<KSFile>()
+
+    /**
+     * Escape hatch: `ksp { arg("novalles.safeDependencies", "true") }` restores the previous
+     * behaviour of associating every output with every source file. It disables incremental
+     * processing, so use it only to work around a suspected dependency bug.
+     */
+    private val safeDependencies = options["novalles.safeDependencies"] == "true"
+
+    private fun dependenciesOf(aggregating: Boolean, vararg files: KSFile?): Dependencies {
+        if (safeDependencies) return Dependencies.ALL_FILES
+        return Dependencies(aggregating, *files.filterNotNull().distinct().toTypedArray())
+    }
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
 
@@ -63,36 +80,28 @@ class NovallesProcessor(
 
         if (symbols.isEmpty() && instructors.isEmpty() && catalogue == null) return emptyList()
 
-        val dependencies = Dependencies(false, *resolver.getAllFiles().toList().toTypedArray())
-
         //Validate once per symbol: validate() resolves every reachable type reference.
         val validatedSymbols = symbols.map { it to it.validate() }
         val validatedInstructors = instructors.map { it to it.validate() }
 
         validatedSymbols.forEach { (symbol, isValid) ->
             if (isValid && symbol is KSClassDeclaration) {
-                symbol.accept(UIModelVisitor(dependencies), Unit)
+                symbol.accept(UIModelVisitor(), Unit)
             }
         }
 
         validatedInstructors.forEach { (instructor, isValid) ->
             if (isValid && instructor is KSClassDeclaration) {
-                instructor.accept(ViewHoldersVisitor(dependencies), Unit)
+                instructor.accept(ViewHoldersVisitor(), Unit)
             }
         }
 
-        val contributors = symbols + instructors
-
         if (pages != null) {
-            createPage(pages, contributors, dependencies)
+            createPage(pages)
         }
 
         if (catalogue != null) {
-            createCatalogue(
-                catalogue,
-                contributors,
-                dependencies
-            )
+            createCatalogue(catalogue)
         }
 
         val deferred = (validatedSymbols + validatedInstructors)
@@ -102,11 +111,7 @@ class NovallesProcessor(
         return if (catalogue != null && !catalogue.validate()) deferred + catalogue else deferred
     }
 
-    private fun createPage(
-        pages: KSClassDeclaration,
-        classes: List<KSAnnotated>,
-        dependencies: Dependencies
-    ) {
+    private fun createPage(pages: KSClassDeclaration) {
         val fileString = buildString {
             buildIn {
                 appendIn("package $CATALOGUES_PACKAGE")
@@ -181,8 +186,9 @@ class NovallesProcessor(
                 incrementLevel()
                 appendIn("val helper = when (clazz) {")
                 incrementLevel()
-                for ((key, value) in catalogUIModels) {
-                    appendIn("$key::class -> ${value.replace("UIHelper", "Inspector")}")
+                for ((key, _) in catalogUIModels) {
+                    val inspector = catalogInspectors[key] ?: continue
+                    appendIn("$key::class -> $inspector")
                 }
                 appendIn("else -> return null")
                 appendDown("}")
@@ -191,25 +197,21 @@ class NovallesProcessor(
                 closeFunctions()
             }
         }
+        //Aggregating: this page lists every @UIModel and every generated Inspector, so any new symbol must invalidate it.
         val file = codeGenerator.createNewFile(
-            dependencies,
+            dependenciesOf(
+                aggregating = true,
+                pages.containingFile,
+                *catalogUIModelFiles.toTypedArray(),
+                *catalogInspectorFiles.toTypedArray()
+            ),
             CATALOGUES_PACKAGE,
             pages.simpleName.getShortName()
         )
         file.write(fileString.toByteArray())
-        codeGenerator.associateWithClasses(
-            classes.filterIsInstance<KSClassDeclaration>(),
-            CATALOGUES_PACKAGE,
-            pages.simpleName.getShortName()
-        )
     }
 
-    private fun createCatalogue(
-        catalogue: KSClassDeclaration,
-        classes: List<KSAnnotated>,
-        dependencies: Dependencies,
-    ) {
-
+    private fun createCatalogue(catalogue: KSClassDeclaration) {
         val pagesRaw = catalogue.findAnnotation(NovallesCatalogue::class)?.arguments?.first()?.value as ArrayList<*>
         val pages = pagesRaw.filterIsInstance<KSType>()
 
@@ -283,20 +285,20 @@ class NovallesProcessor(
             }
         }
 
+        //Aggregating: a newly added page must invalidate the root catalogue.
         val file = codeGenerator.createNewFile(
-            dependencies,
+            dependenciesOf(
+                aggregating = true,
+                catalogue.containingFile,
+                *pages.map { it.declaration.containingFile }.toTypedArray()
+            ),
             CATALOGUES_PACKAGE,
             "NovallesCatalogue"
         )
         file.write(fileString.toByteArray())
-        codeGenerator.associateWithClasses(
-            classes.filterIsInstance<KSClassDeclaration>(),
-            CATALOGUES_PACKAGE,
-            "NovallesCatalogue"
-        )
     }
 
-    private inner class ViewHoldersVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
+    private inner class ViewHoldersVisitor : KSVisitorVoid() {
 
         val errorHandler = ErrorHandler(logger)
 
@@ -308,11 +310,20 @@ class NovallesProcessor(
             errorHandler.checkInspector(classDeclaration)
 
             val core = classDeclaration.findAnnotation(Instruction::class) ?: throwUnexpected()
-            val model =
-                (core.arguments.first().value as KSType).declaration.closestClassDeclaration()
-                    ?: throwUnexpected()
+            val model = (core.arguments.first().value as KSType).declaration.closestClassDeclaration() ?: throwUnexpected()
             val (viewHolder, prefix, bindPrefix) = extractViewHolderAnnotations(classDeclaration)
             val name = classDeclaration.simpleName.getShortName()
+
+            //Register this model's Inspector for the catalogue; reject a second @Instruction for the same model.
+            val modelQualifiedName = model.qualifiedName?.asString() ?: throwUnexpected()
+            if (catalogInspectors.containsKey(modelQualifiedName)) {
+                errorHandler.logError(
+                    classDeclaration,
+                    "Model ${model.simpleName.getShortName()} already has an Instruction. Only one @Instruction is allowed per UI model."
+                )
+            }
+            catalogInspectors[modelQualifiedName] = "$PACKAGE.${model.simpleName.getShortName()}Inspector()"
+            classDeclaration.containingFile?.let(catalogInspectorFiles::add)
 
             //Materialized once: getAllFunctions() walks the whole supertype closure.
             val declarationFunctions = classDeclaration.getAllFunctions().toList()
@@ -364,7 +375,7 @@ class NovallesProcessor(
                 if (payloads.isNotEmpty()) "$PACKAGE.${model.simpleName.getShortName()}Payloads.*" else null,
                 classDeclaration.qualifiedName?.asString(),
                 Inspector::class.qualifiedName,
-                model.qualifiedName?.asString(),
+                modelQualifiedName,
                 "androidx.annotation.Keep",
                 "com.flexeiprata.novalles.interfaces.Novalles"
             )
@@ -487,7 +498,13 @@ class NovallesProcessor(
             }
 
             val file = codeGenerator.createNewFile(
-                dependencies,
+                dependenciesOf(
+                    aggregating = false,
+                    classDeclaration.containingFile,
+                    model.containingFile,
+                    viewHolder.containingFile,
+                    *tagFunctions.map { it.second.declaration.containingFile }.toTypedArray()
+                ),
                 PACKAGE,
                 "${model.simpleName.getShortName()}PayloadOfUIModel"
             )
@@ -519,7 +536,7 @@ class NovallesProcessor(
 
     }
 
-    private inner class UIModelVisitor(val dependencies: Dependencies) : KSVisitorVoid() {
+    private inner class UIModelVisitor : KSVisitorVoid() {
 
         override fun visitClassDeclaration(
             classDeclaration: KSClassDeclaration, data: Unit
@@ -597,6 +614,7 @@ class NovallesProcessor(
                 val catalogueValueName = PACKAGE + ".${name}UIHelper()"
 
                 catalogUIModels[catalogueIndexName] = catalogueValueName
+                classDeclaration.containingFile?.let(catalogUIModelFiles::add)
 
                 importsMap.values.forEach {
                     add("import $it")
@@ -714,7 +732,7 @@ class NovallesProcessor(
 
 
             val file = codeGenerator.createNewFile(
-                dependencies,
+                dependenciesOf(aggregating = false, classDeclaration.containingFile),
                 PACKAGE,
                 "${name}UIModelInterfaces"
             )
