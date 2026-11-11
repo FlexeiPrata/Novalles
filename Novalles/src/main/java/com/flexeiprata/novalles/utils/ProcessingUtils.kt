@@ -1,19 +1,28 @@
 package com.flexeiprata.novalles.utils
 
-import com.google.devtools.ksp.symbol.KSReferenceElement
-import com.google.devtools.ksp.symbol.KSTypeReference
+import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSValueParameter
 
-private val PRIMITIVES = hashSetOf(
-    "String", "Int", "Short", "Number", "Boolean", "Byte", "Char", "Float", "Double", "Long",
-    "Unit", "Any"
-)
+/**
+ * Key and payload fields of a UI model. Both visitors read it, so the UIHelper and the Inspector cannot disagree.
+ */
+internal fun KSClassDeclaration.uiFields(): UIFields? {
+    val constructor = primaryConstructor ?: return null
 
-internal fun KSReferenceElement?.isPrimitive(): Boolean {
-    return this != null && toString() in PRIMITIVES
-}
+    //Single pass over the parameters: each annotation sequence is walked once.
+    var primaryTag: KSValueParameter? = null
+    val notUI = HashSet<KSValueParameter>()
+    constructor.parameters.forEach { parameter ->
+        parameter.annotations.forEach { annotation ->
+            when (annotation.shortName.getShortName()) {
+                KUIAnnotations.PrimaryTag.name -> if (primaryTag == null) primaryTag = parameter
+                KUIAnnotations.NonUIProperty.name -> notUI.add(parameter)
+            }
+        }
+    }
 
-internal fun KSTypeReference?.isPrimitive(): Boolean {
-    return this != null && toString() in PRIMITIVES
+    val key = primaryTag ?: constructor.parameters.firstOrNull() ?: return null
+    return UIFields(key, constructor.parameters.filterNot { it == key || it in notUI })
 }
 
 internal enum class KUIAnnotations {

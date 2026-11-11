@@ -28,3 +28,16 @@ annotation class NovallesCatalogue(
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
 annotation class NovallesPage
+
+/**
+ * Novalles adds this annotation to the classes it generates when strict catalogue mode is on
+ * (`ksp { arg("novalles.strictCatalogue", "true") }`). Such classes can only be created through the [NovallesCatalogue],
+ * so if Novalles ever tries to create one with reflection, it throws an exception instead.
+ * You don't need to use it yourself.
+ *
+ * @see [NovallesCatalogue]
+ * @see [NovallesPage]
+ */
+@Target(AnnotationTarget.CLASS)
+@Retention(AnnotationRetention.RUNTIME)
+annotation class CatalogueOnly

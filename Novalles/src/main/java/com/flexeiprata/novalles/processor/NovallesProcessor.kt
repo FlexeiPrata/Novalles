@@ -4,6 +4,7 @@ import com.flexeiprata.novalles.annotations.BindOn
 import com.flexeiprata.novalles.annotations.BindOnFields
 import com.flexeiprata.novalles.annotations.BindOnTag
 import com.flexeiprata.novalles.annotations.BindViewHolder
+import com.flexeiprata.novalles.annotations.CatalogueOnly
 import com.flexeiprata.novalles.annotations.Instruction
 import com.flexeiprata.novalles.annotations.NovallesCatalogue
 import com.flexeiprata.novalles.annotations.NovallesPage
@@ -13,9 +14,8 @@ import com.flexeiprata.novalles.interfaces.UIModelHelper
 import com.flexeiprata.novalles.utils.CachedField
 import com.flexeiprata.novalles.utils.InspectorFunData
 import com.flexeiprata.novalles.utils.InspectorFunDataFlat
-import com.flexeiprata.novalles.utils.KUIAnnotations
 import com.flexeiprata.novalles.utils.Payloading
-import com.flexeiprata.novalles.utils.isPrimitive
+import com.flexeiprata.novalles.utils.uiFields
 import com.flexeiprata.novalles.utils.writingtools.add
 import com.flexeiprata.novalles.utils.writingtools.buildIn
 import com.flexeiprata.novalles.utils.writingtools.capitalizeFirst
@@ -37,9 +37,10 @@ import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSFile
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
-import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.KSVisitorVoid
 import com.google.devtools.ksp.validate
 
@@ -49,12 +50,12 @@ class NovallesProcessor(
     private val options: Map<String, String> = emptyMap()
 ) : SymbolProcessor {
 
-    private val payloadsMap = mutableMapOf<String, MutableList<Payloading>>()
-    private val cachedFieldsMap = mutableMapOf<String, MutableList<CachedField>>()
     private val catalogUIModels = mutableMapOf<String, String>()
     private val catalogUIModelFiles = mutableSetOf<KSFile>()
     private val catalogInspectors = mutableMapOf<String, String>()
     private val catalogInspectorFiles = mutableSetOf<KSFile>()
+    private val catalogInstructors = mutableMapOf<String, String>()
+    private var pageSeen = false
 
     /**
      * Escape hatch: `ksp { arg("novalles.safeDependencies", "true") }` restores the previous
@@ -63,26 +64,35 @@ class NovallesProcessor(
      */
     private val safeDependencies = options["novalles.safeDependencies"] == "true"
 
+    /**
+     * `ksp { arg("novalles.strictCatalogue", "true") }` forbids the reflection fallback: setups that would need it fail
+     * the build, generated classes get [CatalogueOnly], and the generated catalogue throws instead of returning null.
+     */
+    private val strictCatalogue = options["novalles.strictCatalogue"] == "true"
+
     private fun dependenciesOf(aggregating: Boolean, vararg files: KSFile?): Dependencies {
         if (safeDependencies) return Dependencies.ALL_FILES
         return Dependencies(aggregating, *files.filterNotNull().distinct().toTypedArray())
     }
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
-
         val symbols = resolver.getSymbolsWithAnnotation(UIModel::class.qualifiedName!!).toList()
-        val instructors =
-            resolver.getSymbolsWithAnnotation(Instruction::class.qualifiedName!!).toList()
-        val pages = resolver.getSymbolsWithAnnotation(NovallesPage::class.qualifiedName!!)
-            .firstOrNull() as? KSClassDeclaration?
-        val catalogue = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!)
-            .firstOrNull() as? KSClassDeclaration?
+        val instructors = resolver.getSymbolsWithAnnotation(Instruction::class.qualifiedName!!).toList()
+        val allPages = resolver.getSymbolsWithAnnotation(NovallesPage::class.qualifiedName!!).toList()
+        val allCatalogues = resolver.getSymbolsWithAnnotation(NovallesCatalogue::class.qualifiedName!!).toList()
+        val pages = allPages.firstOrNull() as? KSClassDeclaration?
+        val catalogue = allCatalogues.firstOrNull() as? KSClassDeclaration?
 
         if (symbols.isEmpty() && instructors.isEmpty() && catalogue == null) return emptyList()
 
-        //Validate once per symbol: validate() resolves every reachable type reference.
+        checkSingle(allPages, NovallesPage::class.simpleName)
+        checkSingle(allCatalogues, NovallesCatalogue::class.simpleName)
+
+        if (pages != null) pageSeen = true
+        if (strictCatalogue) checkStrictCatalogue(symbols + instructors, pages, catalogue)
+
         val validatedSymbols = symbols.map { it to it.validate() }
-        val validatedInstructors = instructors.map { it to it.validate() }
+        val validatedInstructors = instructors.map { it to (it.validate() && it.instructedModel()?.validate() != false) }
 
         validatedSymbols.forEach { (symbol, isValid) ->
             if (isValid && symbol is KSClassDeclaration) {
@@ -109,6 +119,39 @@ class NovallesProcessor(
             .map { (symbol, _) -> symbol }
 
         return if (catalogue != null && !catalogue.validate()) deferred + catalogue else deferred
+    }
+
+    private fun checkSingle(annotated: List<KSAnnotated>, annotationName: String?) {
+        val second = annotated.getOrNull(1) ?: return
+        val names = annotated.joinToString { (it as? KSDeclaration)?.qualifiedName?.asString().toString() }
+        ErrorHandler(logger).logError(second, "Only one class per module can be annotated with $annotationName, found: $names.")
+    }
+
+    private fun checkStrictCatalogue(annotated: List<KSAnnotated>, page: KSClassDeclaration?, catalogue: KSClassDeclaration?) {
+        val errorHandler = ErrorHandler(logger)
+        val first = annotated.firstOrNull()
+        if (!pageSeen && first != null) {
+            errorHandler.logError(
+                first,
+                "Strict catalogue mode is on, but this module has no NovallesPage, so its UI models could only be found with reflection."
+            )
+        }
+        if (page != null && catalogue != null && cataloguePages(catalogue).none { it.declaration.qualifiedName?.asString() == page.qualifiedName?.asString() }) {
+            errorHandler.logError(
+                page,
+                "Strict catalogue mode is on, but ${page.simpleName.getShortName()} is not listed in the pages of ${catalogue.simpleName.getShortName()}, so its UI models could only be found with reflection."
+            )
+        }
+    }
+
+    private fun cataloguePages(catalogue: KSClassDeclaration): List<KSType> {
+        val pagesRaw = catalogue.findAnnotation(NovallesCatalogue::class)?.arguments?.first()?.value as ArrayList<*>
+        return pagesRaw.filterIsInstance<KSType>()
+    }
+
+    private fun KSAnnotated.instructedModel(): KSClassDeclaration? {
+        val instruction = (this as? KSClassDeclaration)?.findAnnotation(Instruction::class) ?: return null
+        return (instruction.arguments.firstOrNull()?.value as? KSType)?.declaration?.closestClassDeclaration()
     }
 
     private fun createPage(pages: KSClassDeclaration) {
@@ -140,7 +183,8 @@ class NovallesProcessor(
                 incrementLevel()
                 appendIn("return when (clazz) {")
                 incrementLevel()
-                val classesList = catalogUIModels.keys.joinToString(
+                val instructorKeys = catalogUIModels.keys.mapNotNull { catalogInstructors[it] }
+                val classesList = (catalogUIModels.keys + instructorKeys).joinToString(
                     separator = ",\n$tabs",
                     prefix = "",
                     postfix = "",
@@ -190,6 +234,10 @@ class NovallesProcessor(
                     val inspector = catalogInspectors[key] ?: continue
                     appendIn("$key::class -> $inspector")
                 }
+                for ((key, _) in catalogUIModels) {
+                    val instructor = catalogInstructors[key] ?: continue
+                    appendIn("$instructor::class -> ${catalogInspectors[key]}")
+                }
                 appendIn("else -> return null")
                 appendDown("}")
                 appendIn("return helper as Inspector<T, Any, Any>")
@@ -212,8 +260,12 @@ class NovallesProcessor(
     }
 
     private fun createCatalogue(catalogue: KSClassDeclaration) {
-        val pagesRaw = catalogue.findAnnotation(NovallesCatalogue::class)?.arguments?.first()?.value as ArrayList<*>
-        val pages = pagesRaw.filterIsInstance<KSType>()
+        val pages = cataloguePages(catalogue)
+
+        //Strict mode: a miss throws, so the runtime never reaches the reflection fallback.
+        val notInCatalogue = if (strictCatalogue) "throw IllegalStateException(\"Strict catalogue mode: \${clazz.qualifiedName} is not in any NovallesPage of this catalogue.\")" else "return null"
+        val noHelper = if (strictCatalogue) " ?: throw IllegalStateException(\"Strict catalogue mode: \${clazz.qualifiedName} is not a UIModel.\")" else ""
+        val noInspector = if (strictCatalogue) " ?: throw IllegalStateException(\"Strict catalogue mode: \${clazz.qualifiedName} has no Inspector, because its model has no Instruction.\")" else ""
 
         //UI model catalogue
         val fileString = buildString {
@@ -256,9 +308,9 @@ class NovallesProcessor(
                 pages.forEach { page ->
                     appendIn("${page.declaration.simpleName.getShortName().lowercaseFirst()}.eligible(clazz) -> ${page.declaration.simpleName.getShortName().lowercaseFirst()}.provideUiModel<T>(clazz)")
                 }
-                appendIn("else -> return null")
+                appendIn("else -> $notInCatalogue")
                 appendDown("}")
-                appendIn("return helper as UIModelHelper<T>")
+                appendIn("return helper as UIModelHelper<T>?$noHelper")
                 appendDown("}")
                 newLine()
                 appendIn("@Suppress(\"UNCHECKED_CAST\")")
@@ -277,9 +329,9 @@ class NovallesProcessor(
                 pages.forEach { page ->
                     appendIn("${page.declaration.simpleName.getShortName().lowercaseFirst()}.eligible(clazz) -> ${page.declaration.simpleName.getShortName().lowercaseFirst()}.provideInspector<T>(clazz)")
                 }
-                appendIn("else -> return null")
+                appendIn("else -> $notInCatalogue")
                 appendDown("}")
-                appendIn("return helper as Inspector<T, Any, Any>")
+                appendIn("return helper as Inspector<T, Any, Any>?$noInspector")
                 appendDown("}")
                 closeFunctions()
             }
@@ -311,6 +363,12 @@ class NovallesProcessor(
 
             val core = classDeclaration.findAnnotation(Instruction::class) ?: throwUnexpected()
             val model = (core.arguments.first().value as KSType).declaration.closestClassDeclaration() ?: throwUnexpected()
+            if (model.findAnnotation(UIModel::class) == null) {
+                errorHandler.logError(
+                    classDeclaration,
+                    "Instruction model ${model.simpleName.getShortName()} is not annotated with UIModel, so there are no payloads to handle."
+                )
+            }
             val (viewHolder, prefix, bindPrefix) = extractViewHolderAnnotations(classDeclaration)
             val name = classDeclaration.simpleName.getShortName()
 
@@ -324,6 +382,8 @@ class NovallesProcessor(
             }
             catalogInspectors[modelQualifiedName] = "$PACKAGE.${model.simpleName.getShortName()}Inspector()"
             classDeclaration.containingFile?.let(catalogInspectorFiles::add)
+            //The Instructor is a catalogue key too: R8 strips @Instruction, so it can't be mapped to its model at runtime.
+            classDeclaration.qualifiedName?.asString()?.let { catalogInstructors[modelQualifiedName] = it }
 
             //Materialized once: getAllFunctions() walks the whole supertype closure.
             val declarationFunctions = classDeclaration.getAllFunctions().toList()
@@ -366,8 +426,12 @@ class NovallesProcessor(
                 .firstWinsBy { it.simpleName.getShortName() }
                 .mapValues { (_, function) -> function.isFirstArgNullable() }
 
-            val payloads = payloadsMap[model.simpleName.getShortName()] ?: emptyList()
-            val cachedFields = cachedFieldsMap[model.simpleName.getShortName()] ?: emptyList()
+            //Read from the model itself, not from processor state: the model may not be processed in this round.
+            val fieldStates = model.uiFields()?.fields.orEmpty().map { it.toString() to it.type.resolve().isMarkedNullable }
+            val payloads = fieldStates.map { (field, isNullable) -> Payloading("${field.capitalizeFirst()}Changed", isNullable) }
+            val cachedFields = fieldStates.map { (field, isNullable) -> CachedField(field, isNullable) }
+
+            checkHandlers(declarationFunctions, model, fieldStates.map { (field, _) -> field.capitalizeFirst() }.toSet())
 
             //Imports
             val listOfImports = listOfNotNull(
@@ -377,7 +441,8 @@ class NovallesProcessor(
                 Inspector::class.qualifiedName,
                 modelQualifiedName,
                 "androidx.annotation.Keep",
-                "com.flexeiprata.novalles.interfaces.Novalles"
+                "com.flexeiprata.novalles.interfaces.Novalles",
+                if (strictCatalogue) CatalogueOnly::class.qualifiedName else null
             )
 
             val text = buildString {
@@ -388,6 +453,7 @@ class NovallesProcessor(
                 newLine(2)
 
                 buildIn {
+                    if (strictCatalogue) appendIn("@CatalogueOnly")
                     appendIn("@Keep")
                     append("class ${model.simpleName.getShortName()}Inspector : Inspector<$name, ${viewHolder.simpleName.getShortName()}, ${model.simpleName.getShortName()}> {")
                     newLine(1)
@@ -514,6 +580,44 @@ class NovallesProcessor(
             super.visitClassDeclaration(classDeclaration, data)
         }
 
+        private fun checkHandlers(functions: List<KSFunctionDeclaration>, model: KSClassDeclaration, fieldNames: Set<String>) {
+            functions.forEach { function ->
+                val functionName = function.simpleName.getShortName()
+                val bindOn = function.findAnnotation(BindOn::class)
+                val bindOnFields = function.findAnnotation(BindOnFields::class)
+                val parameters = function.parameters
+                val requiredParameters = parameters.filterNot { it.hasDefault }
+
+                //BindOn: called with no argument, or with one Boolean argument
+                if (bindOn != null && parameters.isNotEmpty() && (parameters.size > 1 || parameters.first().type.toString() != "Boolean")) {
+                    logger.warn(
+                        "$functionName is annotated with BindOn, but it should have no parameters or a single Boolean parameter, so Novalles never calls it.",
+                        function
+                    )
+                }
+
+                //BindOnFields and BindOnTag: always called with no arguments
+                if ((bindOnFields != null || function.findAnnotation(BindOnTag::class) != null) && requiredParameters.isNotEmpty()) {
+                    errorHandler.logError(
+                        function,
+                        "$functionName is annotated with ${if (bindOnFields != null) "BindOnFields" else "BindOnTag"}, so it should have no parameters."
+                    )
+                }
+
+                val boundFields = when {
+                    bindOn != null -> listOf(bindOn.arguments.first().value as String)
+                    bindOnFields != null -> (bindOnFields.arguments.first().value as ArrayList<*>?)?.filterIsInstance<String>().orEmpty()
+                    else -> emptyList()
+                }
+                boundFields.filterNot { it.capitalizeFirst() in fieldNames }.forEach { field ->
+                    logger.warn(
+                        "$functionName is bound to \"$field\", but ${model.simpleName.getShortName()} has no UI field with that name, so Novalles never calls it for that field. PrimaryTag and NonUIProperty fields never produce payloads.",
+                        function
+                    )
+                }
+            }
+        }
+
         private fun extractViewHolderAnnotations(classDeclaration: KSClassDeclaration): Triple<KSClassDeclaration, String, String> {
             return when (val annotation = classDeclaration.findAnnotation(BindViewHolder::class)) {
                 null -> {
@@ -545,90 +649,40 @@ class NovallesProcessor(
             val errorHandler = ErrorHandler(logger)
             errorHandler.checkDataClassUIModel(classDeclaration)
 
-            val constructor = classDeclaration.primaryConstructor ?: return
-
-            //Single pass over the parameters: each annotation sequence is walked once.
-            var primaryTag: KSValueParameter? = null
-            val notUI = HashSet<KSValueParameter>()
-            constructor.parameters.forEach { parameter ->
-                parameter.annotations.forEach { annotation ->
-                    when (annotation.shortName.getShortName()) {
-                        KUIAnnotations.PrimaryTag.name -> if (primaryTag == null) primaryTag = parameter
-                        KUIAnnotations.NonUIProperty.name -> notUI.add(parameter)
-                    }
-                }
-            }
-
-            val key = primaryTag ?: constructor.parameters.firstOrNull() ?: return
-
-            val fields = constructor.parameters.filterNot { it == key || it in notUI }
+            val (key, fields) = classDeclaration.uiFields() ?: return
             val name = classDeclaration.simpleName.getShortName()
             val import = classDeclaration.qualifiedName?.asString()
             val payloadsBaseInterface = "BasePayload"
 
-            //Resolve each field type once; both the payload list and the imports need it.
-            val resolvedFields = fields.map { it to it.type.resolve() }
+            //Generated names use the simple name only, so two models named alike would overwrite each other.
+            catalogUIModels.keys.find { it != import && it.substringAfterLast('.') == name }?.let { other ->
+                errorHandler.logError(
+                    classDeclaration,
+                    "UI model names should be unique within a module: $other and $import both generate ${name}UIHelper."
+                )
+            }
 
-            val payList = mutableListOf<Payloading>()
-            val cachedFields = mutableListOf<CachedField>()
-            payloadsMap[name] = payList
-            cachedFieldsMap[name] = cachedFields
-            payList.addAll(
-                resolvedFields.map { (parameter, typeResolved) ->
-                    cachedFields.add(
-                        CachedField(
-                            parameter.toString(),
-                            typeResolved.isMarkedNullable
-                        )
-                    )
-                    Payloading(
-                        "${parameter.toString().capitalizeFirst()}Changed",
-                        typeResolved.isMarkedNullable
-                    )
-                }
-            )
             val fileText = buildString {
                 add("package $PACKAGE")
                 newLine()
 
-                val importsMap = mutableMapOf<String, String>()
-                resolvedFields.forEach { (parameter, paramType) ->
-                    if (!parameter.type.element.isPrimitive()) {
-                        val clazz = paramType.declaration.qualifiedName?.asString()
-                            ?: return@forEach
-                        importsMap[paramType.declaration.qualifiedName?.getShortName()
-                            ?: return@forEach] = clazz
-                        parameter.type.element?.typeArguments?.forEach Typed@{
-                            if (!it.type.isPrimitive()) {
-                                val resolvedElement = it.type?.resolve()
-                                val nameClass =
-                                    resolvedElement?.declaration?.qualifiedName?.asString()
-                                        ?: return@Typed
-                                importsMap[resolvedElement.declaration.qualifiedName?.getShortName()
-                                    ?: return@Typed] = nameClass
-                            }
-                        }
-                    }
-                }
                 val catalogueIndexName = classDeclaration.qualifiedName!!.asString()
                 val catalogueValueName = PACKAGE + ".${name}UIHelper()"
 
                 catalogUIModels[catalogueIndexName] = catalogueValueName
                 classDeclaration.containingFile?.let(catalogUIModelFiles::add)
 
-                importsMap.values.forEach {
-                    add("import $it")
-                }
-
+                //Field types are written fully qualified (see writeAsVariable), so they need no imports.
                 add("import $import")
                 add("import ${com.flexeiprata.novalles.interfaces.BasePayload::class.qualifiedName}")
                 add("import androidx.annotation.Keep")
                 add("import com.flexeiprata.novalles.interfaces.*")
-                add("import androidx.recyclerview.widget.RecyclerView.ViewHolder")
+                if (strictCatalogue) add("import ${CatalogueOnly::class.qualifiedName}")
                 newLine()
 
                 val payloadsName = "${name}Payloads"
                 buildIn {
+                    if (strictCatalogue) appendIn("@CatalogueOnly")
                     appendIn("@Keep")
                     appendIn("class ${name}UIHelper() : UIModelHelper<$name>{ ")
                     appendUp(

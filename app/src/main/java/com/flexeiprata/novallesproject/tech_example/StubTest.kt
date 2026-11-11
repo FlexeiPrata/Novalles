@@ -8,6 +8,7 @@ import com.flexeiprata.novalles.annotations.Instruction
 import com.flexeiprata.novalles.annotations.PrimaryTag
 import com.flexeiprata.novalles.annotations.UIModel
 import com.flexeiprata.novalles.interfaces.Instructor
+import com.flexeiprata.novalles.interfaces.Novalles
 import com.flexeiprata.novallesproject.databinding.ItemPictureBinding
 
 
@@ -64,3 +65,19 @@ data class HelperOnlyStubModel(
     @PrimaryTag val id: String,
     val label: String
 )
+
+//Nested generics, a use-site projection and two types named Thing: each used to generate code that did not compile.
+@UIModel
+data class NestedGenericStubModel(
+    @PrimaryTag val id: String,
+    val grid: List<List<String>>,
+    val groups: Map<String, List<Thing>>,
+    val pairs: List<Pair<String, Int>?>,
+    val sources: MutableList<out Thing>,
+    val thing: Thing,
+    val otherThing: com.flexeiprata.novallesproject.tech_example.other.Thing
+)
+
+//The README passes a concrete Instructor class here, so this call must compile.
+@Suppress("unused")
+fun instructorCatalogueStub() = Novalles.provideInspectorFromInstructorCatalogue(GenericStubInstructor::class)

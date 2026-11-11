@@ -4,11 +4,14 @@ import com.google.devtools.ksp.symbol.*
 import kotlin.reflect.KClass
 
 internal fun KSValueParameter.writeAsVariable(): String {
-    val resolved = type.resolve()
-    val name = resolved.declaration.simpleName.getShortName()
-    val args = type.element?.typeArguments?.toTypeString().orEmpty()
-    val nullable = if (resolved.isMarkedNullable) "?" else ""
-    return "$name$args$nullable"
+    return type.resolve().toQualifiedString()
+}
+
+//Fully qualified and recursive, so nested generics compile and same-named types from different packages never clash.
+internal fun KSType.toQualifiedString(): String {
+    val name = declaration.qualifiedName?.asString() ?: declaration.simpleName.asString()
+    val nullable = if (isMarkedNullable) "?" else ""
+    return "$name${arguments.toTypeString()}$nullable"
 }
 
 /**
@@ -55,7 +58,12 @@ internal fun List<KSTypeArgument>.toTypeString(): String {
             ) { argument ->
                 //A star projection has no type, f.e. List<*>.
                 val resolved = argument.type?.resolve() ?: return@joinToString "*"
-                resolved.declaration.simpleName.getShortName() + if (resolved.isMarkedNullable) "?" else ""
+                when (argument.variance) {
+                    Variance.STAR -> "*"
+                    Variance.COVARIANT -> "out ${resolved.toQualifiedString()}"
+                    Variance.CONTRAVARIANT -> "in ${resolved.toQualifiedString()}"
+                    Variance.INVARIANT -> resolved.toQualifiedString()
+                }
             }
         }
     }

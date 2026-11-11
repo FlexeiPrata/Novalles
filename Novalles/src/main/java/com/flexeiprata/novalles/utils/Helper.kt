@@ -1,5 +1,7 @@
 package com.flexeiprata.novalles.utils
 
+import com.google.devtools.ksp.symbol.KSValueParameter
+
 internal data class Payloading(
     val name: String,
     val isNullable: Boolean
@@ -20,4 +22,9 @@ internal data class InspectorFunData(
 internal data class InspectorFunDataFlat(
     val name: String,
     val target: String
+)
+
+internal data class UIFields(
+    val key: KSValueParameter,
+    val fields: List<KSValueParameter>
 )

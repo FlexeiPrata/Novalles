@@ -1,14 +1,33 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id 'java-library'
     id 'org.jetbrains.kotlin.jvm'
+    id 'maven-publish'
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+    withSourcesJar()
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_17
+    }
 }
 
 dependencies {
+    //Must stay implementation: the processor ships in the runtime jar, and R8 fails on its KSP references if the API is compileOnly.
     implementation("com.google.devtools.ksp:symbol-processing-api:2.2.20-2.0.3")
-    implementation "org.jetbrains.kotlin:kotlin-reflect:2.2.20"
+}
+
+publishing {
+    publications {
+        release(MavenPublication) {
+            from components.java
+            artifactId = 'novalles'
+        }
+    }
 }
